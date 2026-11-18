@@ -1,9 +1,9 @@
 import "server-only";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { z } from "zod";
 import * as schema from "@/lib/db/schema";
-import { unpublishStatements } from "@/lib/public/published-profile";
+import { snapshotDeleteStatements } from "@/lib/public/published-profile";
 
 type Db = DrizzleD1Database<typeof schema>;
 
@@ -115,12 +115,23 @@ export async function suspendProfile(deps: AdminDeps, actor: Actor, raw: unknown
   const target = await loadTarget(db, parsed.data.profileId);
   if (!target) return fail(404, "Profile not found");
   if (target.status === "suspended") return fail(409, "This Profile is already suspended");
-  const [deleteLinks, deleteSnapshot] = unpublishStatements(db, target.id);
-  await db.batch([
-    deleteLinks,
-    deleteSnapshot,
+  // D1 runs batches one at a time. The audit entry is written first and only while
+  // the Profile is not yet suspended, so when two suspensions race, the second one
+  // writes nothing and reports 409 instead of adding a second entry.
+  const { profiles, adminAuditLog } = schema;
+  const [audit] = await db.batch([
+    db.insert(adminAuditLog).select(db.select({
+      id: sql<string>`${crypto.randomUUID()}`.as("id"),
+      actorGoogleSub: sql<string>`${actor.googleSub}`.as("actor_google_sub"),
+      action: sql<schema.AdminAuditAction>`'suspend'`.as("action"),
+      targetProfileId: profiles.id,
+      targetSlug: profiles.slug,
+      reason: sql<string>`${parsed.data.reason}`.as("reason"),
+      createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(profiles).where(and(eq(profiles.id, target.id), ne(profiles.status, "suspended")))),
+    ...snapshotDeleteStatements(db, target.id),
     db.update(schema.profiles).set({ status: "suspended", updatedAt: Math.floor(Date.now() / 1000) }).where(and(eq(schema.profiles.id, target.id), ne(schema.profiles.status, "suspended"))),
-    auditEntry(db, actor, "suspend", target, parsed.data.reason),
   ]);
+  if (!audit.meta.changes) return fail(409, "This Profile is already suspended");
   return { status: 200, body: { ok: true, slug: target.slug } };
 }

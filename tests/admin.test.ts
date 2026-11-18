@@ -92,6 +92,16 @@ describe("suspendProfile", () => {
     expect(await auditFor("bea")).toEqual([]);
   });
 
+  it("records one suspension, not two, when two Administrators suspend at the same moment", async () => {
+    await seedPublished("kit");
+    const results = await Promise.all([
+      suspendProfile(deps(), ADMIN, { profileId: "kit", reason: "First" }),
+      suspendProfile(deps(), { id: "u-other", googleSub: "other-sub" }, { profileId: "kit", reason: "Second" }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+    expect(await auditFor("kit")).toHaveLength(1);
+  });
+
   it("requires a reason and an existing, not-yet-suspended Profile", async () => {
     await seedPublished("cy");
     expect((await suspendProfile(deps(), ADMIN, { profileId: "cy", reason: "   " })).status).toBe(400);
