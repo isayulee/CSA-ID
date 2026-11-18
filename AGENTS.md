@@ -98,3 +98,11 @@ These belong to the maintainer. Change them only when the ticket asks for it:
 - `PRODUCT.md`, `GLOSSARY.md`, `agent_technical_readme.md`.
 - The maintainer's tooling folders: `.impeccable/`, `.taste-skill/`, `.codex/`, `.cursor/`, `.gemini/`.
 - `cloudflare-env.d.ts` is generated: after changing `wrangler.jsonc`, regenerate it with `npm run cf-typegen`.
+
+## Agent skills
+
+Skills that triage issues, write tickets or explore the domain read these files first:
+
+- [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md): issues are GitHub issues on `ymsrubio/CSA-ID`, managed with `gh`.
+- [docs/agents/triage-labels.md](docs/agents/triage-labels.md): the five triage labels plus `in-progress`.
+- [docs/agents/domain.md](docs/agents/domain.md): read `GLOSSARY.md`, `PRODUCT.md` and `agent_technical_readme.md`.
