@@ -2,6 +2,8 @@ name: Claim tracking
 
 # Keeps the `in-progress` label in step with issue assignees:
 # assigning someone adds it, and removing the last assignee removes it.
+# The jobs don't check the payload's labels first: that snapshot can be stale
+# after a quick assign/unassign, and adding or removing a label twice is harmless.
 
 on:
   issues:
@@ -14,27 +16,20 @@ concurrency:
   group: claim-tracking-${{ github.event.issue.number }}
   cancel-in-progress: false
 
-jobs:
-  add-in-progress:
-    name: add in-progress
-    if: github.event.action == 'assigned' && !contains(github.event.issue.labels.*.name, 'in-progress')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - run: gh issue edit "$NUMBER" --add-label in-progress
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.issue.number }}
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  NUMBER: ${{ github.event.issue.number }}
+  LABEL: in-progress
 
-  remove-in-progress:
-    name: remove in-progress
-    if: github.event.action == 'unassigned' && !github.event.issue.assignees[0] && contains(github.event.issue.labels.*.name, 'in-progress')
+jobs:
+  claim:
+    name: claim
+    if: github.event.action == 'assigned' || !github.event.issue.assignees[0]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: gh issue edit "$NUMBER" --remove-label in-progress
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.issue.number }}
+      - if: github.event.action == 'assigned'
+        run: gh issue edit "$NUMBER" --add-label "$LABEL"
+      - if: github.event.action == 'unassigned'
+        run: gh issue edit "$NUMBER" --remove-label "$LABEL"
