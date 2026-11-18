@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, exists, ne } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { getCurrentAccount } from "@/lib/auth/current-user";
 import { guardMutation } from "@/lib/http/mutation-guard";
@@ -24,10 +24,17 @@ export async function POST(request: Request) {
     db.delete(publishedProfiles).where(eq(publishedProfiles.profileId, profile.id)),
     db.insert(publishedProfiles).values({ profileId: profile.id, slug: profile.slug, displayName: profile.displayName, role: profile.role, bio: profile.bio, accentColor: profile.accentColor, avatarKey: profile.avatarKey, backgroundKey: profile.backgroundKey, evaluationUrl: profile.evaluationUrl, publishedAt: now }),
     ...links.map((link) => db.insert(publishedSocialLinks).values({ id: crypto.randomUUID(), profileId: profile.id, service: link.service, url: link.url, displayOrder: link.displayOrder })),
-    db.update(profiles).set({ status: "published", updatedAt: now }).where(eq(profiles.id, profile.id)),
+    // An Administrator may suspend the Profile after the status check above. D1 has no
+    // interactive transactions, so these two repeat that check inside the batch: the
+    // status stays `suspended` and the snapshot just written is removed again.
+    db.update(profiles).set({ status: "published", updatedAt: now }).where(and(eq(profiles.id, profile.id), ne(profiles.status, "suspended"))),
+    db.delete(publishedProfiles).where(and(eq(publishedProfiles.profileId, profile.id), exists(db.select({ id: profiles.id }).from(profiles).where(and(eq(profiles.id, profile.id), eq(profiles.status, "suspended")))))),
   ];
-  try { await db.batch(queries as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]); }
+  let results: unknown[];
+  try { results = await db.batch(queries as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]); }
   catch { return NextResponse.json({ error: "That permanent profile address is already taken" }, { status: 409 }); }
+  const statusUpdate = results.at(-2) as D1Result;
+  if (!statusUpdate.meta.changes) return NextResponse.json({ error: "This profile is suspended" }, { status: 403 });
   await purgeProfilePage(profile.slug, request.url);
   return NextResponse.json({ ok: true, slug: profile.slug });
 }
