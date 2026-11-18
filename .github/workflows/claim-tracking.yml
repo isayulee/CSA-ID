@@ -1,0 +1,40 @@
+name: Claim tracking
+
+# Keeps the `in-progress` label in step with issue assignees:
+# assigning someone adds it, and removing the last assignee removes it.
+
+on:
+  issues:
+    types: [assigned, unassigned]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: claim-tracking-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  add-in-progress:
+    name: add in-progress
+    if: github.event.action == 'assigned' && !contains(github.event.issue.labels.*.name, 'in-progress')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh issue edit "$NUMBER" --add-label in-progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+
+  remove-in-progress:
+    name: remove in-progress
+    if: github.event.action == 'unassigned' && !github.event.issue.assignees[0] && contains(github.event.issue.labels.*.name, 'in-progress')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh issue edit "$NUMBER" --remove-label in-progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
