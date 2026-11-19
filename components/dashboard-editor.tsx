@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Brand } from "./brand";
 import { ProfileCard } from "./profile-card";
+import { SocialIcon } from "./social-icon";
+import { defaultAppearance, type ProfileAppearance } from "@/lib/profile-appearance";
+import { isCsaEvaluationForm } from "@/lib/evaluation-form";
 import { services, type ProfileService } from "@/lib/profile-validation";
 
 const sections = ["Profile", "Appearance", "Links"] as const;
@@ -12,7 +15,7 @@ const labels: Record<ProfileService, string> = { linkedin: "LinkedIn", instagram
 
 export type DashboardData = {
   user: { name: string; email: string };
-  profile: { displayName: string; role: string; bio: string; slug: string | null; accentColor: string; evaluationUrl: string | null; status: string; avatarKey: string | null; backgroundKey: string | null };
+  profile: { displayName: string; role: string; bio: string; slug: string | null; accentColor: string; appearance: ProfileAppearance | null; evaluationUrl: string | null; studentNumber: string | null; showStudentNumber: boolean; status: string; avatarKey: string | null; backgroundKey: string | null };
   links: Array<{ service: string; url: string }>;
 };
 
@@ -26,9 +29,15 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const [claimedSlug, setClaimedSlug] = useState(initial.profile.slug);
   const [slugError, setSlugError] = useState("");
   const [color, setColor] = useState(initial.profile.accentColor);
+  const [colorText, setColorText] = useState(initial.profile.accentColor);
+  const [appearance, setAppearance] = useState(initial.profile.appearance);
+  const { iconColor, cardColor, cardOpacity, frosted } = appearance ?? defaultAppearance;
   const [evaluationUrl, setEvaluationUrl] = useState(initial.profile.evaluationUrl || "");
+  const [studentNumber, setStudentNumber] = useState(initial.profile.studentNumber || "");
+  const [showStudentNumber, setShowStudentNumber] = useState(initial.profile.showStudentNumber);
+  const usesCsaForm = !evaluationUrl.trim() || isCsaEvaluationForm(evaluationUrl);
   const [links, setLinks] = useState(initial.links.map((link) => ({ service: link.service as ProfileService, url: link.url })));
-  const [notice, setNotice] = useState("Draft loaded");
+  const [notice, setNotice] = useState("Draft ready");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(initial.profile.status);
   const [avatarUrl, setAvatarUrl] = useState(initial.profile.avatarKey ? `/media/${initial.profile.avatarKey}` : "");
@@ -49,7 +58,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
       .join("") || initial.user.email.slice(0, 2)
   ).toUpperCase();
 
-  const payload = () => ({ displayName: name, role, bio, accentColor: color, evaluationUrl, links });
+  const payload = () => ({ displayName: name, role, bio, accentColor: color, appearance, evaluationUrl, studentNumber, showStudentNumber, links });
 
   async function save(showNotice = true) {
     setBusy(true); if (showNotice) setNotice("Saving draft…");
@@ -123,7 +132,6 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
     <main className="dashboard">
       <header className="dashboardHeader">
         <Brand />
-        <div className="dashboardActions"><span className="saveState" role="status"><i />{notice}</span>{claimedSlug && <Link className="buttonSecondary buttonSmall" href={`/id/${slug}`}>View profile</Link>}<button className="buttonSecondary buttonSmall" disabled={busy} type="button" onClick={() => save()}>Save draft</button><button className="button buttonSmall" disabled={busy} type="button" onClick={publish}><span className="publishLabelFull">{status === "published" ? "Publish changes" : "Publish profile"}</span><span className="publishLabelCompact">{status === "published" ? "Update" : "Publish"}</span></button>{status === "published" && <button className="buttonSecondary buttonSmall" disabled={busy} type="button" onClick={unpublish}>Unpublish</button>}</div>
         <details className="dashboardAccountMenu">
           <summary aria-label="Open account menu" title={userDisplayName}>
             <span aria-hidden="true">{userInitials}</span>
@@ -142,7 +150,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
           </div>
         </details>
       </header>
-      <div className="dashboardBody">
+      <div className="dashboardBody" data-section={section}>
         <aside className="dashboardNav">
           <div>
             <p className="navLabel">Workspace</p>
@@ -151,9 +159,10 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
                 key={item}
                 type="button"
                 className={section === item ? "selected" : ""}
+                aria-pressed={section === item}
                 onClick={() => setSection(item)}
               >
-                <span>{item.slice(0, 1)}</span>
+                <span aria-hidden="true">{item.slice(0, 1)}</span>
                 {item}
               </button>
             ))}
@@ -189,13 +198,65 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
             <label className="field">Display name<input value={name} maxLength={128} onChange={(event) => setName(event.target.value)} /></label>
             <label className="field">Role or title<input value={role} maxLength={128} onChange={(event) => setRole(event.target.value)} /></label>
             <label className="field">Short bio<textarea value={bio} maxLength={500} rows={4} onChange={(event) => setBio(event.target.value)} /><span>{bio.length}/500</span></label>
-            <label className="field">Evaluation form URL<input type="url" value={evaluationUrl} placeholder="https://forms.google.com/…" onChange={(event) => setEvaluationUrl(event.target.value)} /></label>
+            <label className="field">Evaluation form URL<input type="url" value={evaluationUrl} placeholder="CSA evaluation form" onChange={(event) => setEvaluationUrl(event.target.value)} /><small>Leave blank to use the CSA evaluation form.</small></label>
+            <div className="studentNumberSettings">
+              <label className="field">
+                Your student number
+                <input type="text" inputMode="numeric" autoComplete="off" maxLength={32} value={studentNumber} onChange={(event) => setStudentNumber(event.target.value)} />
+                {usesCsaForm && <small>Required for CSA evaluation prefill. Visitors can see it in the evaluation form. Use Last Name, First Name for your display name.</small>}
+              </label>
+              <label className="studentNumberVisibility">
+                <input type="checkbox" checked={showStudentNumber} onChange={(event) => setShowStudentNumber(event.target.checked)} />
+                <span>Show student number on my public profile<small>Applies when you publish.</small></span>
+              </label>
+            </div>
             <label className="field">Permanent profile address<div className="slugField"><span>/id/</span><input value={slug} disabled={Boolean(claimedSlug)} maxLength={64} aria-label="Profile slug" onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} />{!claimedSlug && <button className="buttonSecondary buttonSmall" disabled={busy || slug.length < 3} type="button" onClick={claim}>Claim address</button>}</div><small role={slugError ? "alert" : undefined}>{slugError || (claimedSlug ? "This permanent address is locked." : "Choose carefully. Once claimed, this address can never change.")}</small></label>
           </div>}
 
           {section === "Appearance" && <div className="formStack">
             <div className="backgroundUpload"><div><strong>Background image</strong><p>JPEG, PNG, or WebP. Up to 4 MB.</p></div><input ref={backgroundInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("background", event.target)} /><button className="buttonSecondary buttonSmall" type="button" onClick={() => backgroundInput.current?.click()}>Choose background</button></div>
-            <label className="field">Profile color<div className="colorField"><input type="color" value={color} onChange={(event) => setColor(event.target.value)} /><input value={color.toUpperCase()} onChange={(event) => /^#[0-9a-fA-F]{0,6}$/.test(event.target.value) && setColor(event.target.value)} /></div></label>
+            <fieldset className="appearanceControls">
+              <legend>Profile colors</legend>
+              <div className="appearanceColors">
+                <div className="appearanceColor">
+                  <label htmlFor="profile-button-color">Button color</label>
+                  <span>
+                    <input id="profile-button-color" type="color" value={color} onChange={(event) => {
+                      setColor(event.target.value);
+                      setColorText(event.target.value);
+                    }} />
+                    <input className="colorHex" aria-label="Button color hex value" value={colorText} maxLength={7} spellCheck={false} onBlur={() => setColorText(color)} onChange={(event) => {
+                      setColorText(event.target.value);
+                      if (/^#[0-9a-f]{6}$/i.test(event.target.value)) setColor(event.target.value);
+                    }} />
+                  </span>
+                </div>
+                <label className="appearanceColor">Social icon color
+                  <span><input type="color" value={iconColor} onChange={(event) => setAppearance({ ...defaultAppearance, ...appearance, iconColor: event.target.value })} />{iconColor.toUpperCase()}<SocialIcon platform="website" style={{ color: iconColor }} /></span>
+                </label>
+                <label className="appearanceColor">Card color
+                  <span><input type="color" value={cardColor} onChange={(event) => setAppearance({ ...defaultAppearance, ...appearance, cardColor: event.target.value })} />{cardColor.toUpperCase()}</span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="appearanceControls">
+              <legend>Card finish</legend>
+              <label className="appearanceOpacity" htmlFor="profile-card-opacity">
+                <span>Card opacity <output aria-hidden="true">{cardOpacity}%</output></span>
+                <input id="profile-card-opacity" type="range" min={70} max={100} value={cardOpacity} aria-valuetext={`${cardOpacity}%`} onChange={(event) => setAppearance({ ...defaultAppearance, ...appearance, cardOpacity: event.target.valueAsNumber })} />
+              </label>
+              <label className="appearanceFrost">
+                <input type="checkbox" checked={frosted} onChange={(event) => {
+                  const checked = event.target.checked;
+                  setAppearance({ ...defaultAppearance, ...appearance, frosted: checked, cardOpacity: checked && cardOpacity === 100 ? 78 : cardOpacity });
+                }} />
+                <span>Frosted glass<small>Blurs the background behind the card.</small></span>
+              </label>
+            </fieldset>
+            <div className="appearanceActions">
+              {appearance && <button type="button" className="buttonSecondary buttonSmall" onClick={() => setAppearance(null)}>Reset card styles</button>}
+              <a className="appearancePreviewLink" href="#profile-preview">View live preview</a>
+            </div>
           </div>}
 
           {section === "Links" && <div className="formStack linksForm">
@@ -204,11 +265,30 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
             <button className="buttonSecondary addLink" disabled={links.length >= services.length} type="button" onClick={addLink}>Add social link</button>
           </div>}
         </section>
-        <aside className="previewPane">
-          <div className="previewHeader"><div><p>Live preview</p><span>Mobile</span></div>{slug && <Link className="previewOpen" href={`/id/${slug}`} aria-label="Open published profile">Open</Link>}</div>
-          <div className="phoneFrame"><div className="phoneTop"><span /></div><ProfileCard compact name={name || "Your name"} role={role} bio={bio} primary={color} avatarUrl={avatarUrl} coverUrl={backgroundUrl} /></div>
+        <aside className="previewPane" id="profile-preview" aria-label="Live profile preview">
+          <div className="previewHeader">
+            <div><p>Live preview</p><span>Mobile</span></div>
+            {status === "published" && claimedSlug && (
+              <Link className="previewOpen" href={`/id/${claimedSlug}`}>
+                Open published profile
+              </Link>
+            )}
+          </div>
+          <div className="phoneFrame"><div className="phoneTop"><span /></div><ProfileCard compact name={name || "Your name"} role={role} bio={bio} studentNumber={showStudentNumber ? studentNumber.trim() : undefined} primary={color} avatarUrl={avatarUrl} coverUrl={backgroundUrl} appearance={appearance} socialLinks={links.filter((link) => link.url.trim()).map(({ service }) => ({ service, label: labels[service] }))} /></div>
         </aside>
       </div>
+      <footer className="dashboardFooter" aria-label="Profile actions">
+        <div className="dashboardActions">
+          {claimedSlug && <Link className="buttonSecondary buttonSmall" href={`/id/${claimedSlug}`}>View profile</Link>}
+          <button className="buttonSecondary buttonSmall" disabled={busy} type="button" onClick={() => save()}>Save draft</button>
+          <button className="button buttonSmall" disabled={busy} type="button" onClick={publish}>
+            <span className="publishLabelFull">{status === "published" ? "Publish changes" : "Publish profile"}</span>
+            <span className="publishLabelCompact">Publish</span>
+          </button>
+          {status === "published" && <button className="buttonSecondary buttonSmall dashboardUnpublish" disabled={busy} type="button" onClick={unpublish}>Unpublish</button>}
+        </div>
+        <span className="saveState" role="status">{notice}</span>
+      </footer>
     </main>
   );
 }
