@@ -12,6 +12,7 @@ The product is a public identity page that can optionally be opened from an NFC 
 - The system does not register, activate, transfer, revoke, or inventory NFC cards.
 - A physical NFC card contains only the Profile URL and is programmed separately with a phone application.
 - Published content is user-provided and is not identity-verified.
+- The **Portal** is a private workspace inside the same app for approved **Peer Advisers**: Teaching Kits, the Peer Advising Scheduler, Matching, and the Directory. Section 14 specifies it.
 
 ### Lifecycle
 
@@ -56,6 +57,8 @@ No custom domain is currently available. Treat all provider URLs, including the 
 | Database | Cloudflare D1 Free (SQLite), accessed only through Drizzle ORM | Schema and migrations in Drizzle; authorization enforced in server code (see section 5) |
 | Authentication | Google OIDC through `oauth4webapi`, with server-side Sessions stored in D1 | Request only `openid`, `email`, and `profile`; no third-party auth service |
 | Image storage | Workers KV Free | Store sanitized derivatives only; never store original uploads |
+| Teaching Kit files | Workers KV Free, same namespace | PDF only, 5 MiB each, 500 MB budget for all kits; larger files and videos are Google Drive or YouTube links |
+| Advising Request intake | Google Apps Script on the CSA response Sheet, owned by the CSA team | Pushes rows to the Worker with a shared secret; reads the Sheet only, and the Worker never calls Google APIs |
 | Upload sanitization | Cloudflare Workers Free with the Images Free binding | Decode, resize, strip metadata, and re-encode before storage |
 | Abuse challenge | Cloudflare Turnstile when risk signals trigger | Protect signup-adjacent and upload/report endpoints |
 | Styling | Tailwind CSS plus validated CSS variables | Fixed layouts and allowlisted theme fields only |
@@ -116,7 +119,8 @@ Rules the data-access layer enforces:
 - Anonymous visitors may read only a Published Profile and its Published Social Links when the parent Profile is `published`.
 - Publication and unpublication execute server-side as one atomic D1 batch.
 - Administrative authorization comes from a server-controlled allowlist of Google subject IDs, stored in Worker configuration. It never comes from Profile data or client-editable claims.
-- The D1 and KV bindings, the Google client secret, and the Turnstile secret stay in the Worker and must never be exposed to the browser.
+- The D1 and KV bindings, the Google client secret, the Turnstile secret, and the intake secret stay in the Worker and must never be exposed to the browser.
+- Portal data is shared among Peer Advisers rather than owned by one User. Section 14.2 gives its access rules; every Portal function still takes the authenticated Peer Adviser from the Session and never trusts a user ID from the request.
 
 ## 6. Data Model
 
@@ -415,3 +419,246 @@ An implementation is incomplete until all applicable checks pass:
 - [ ] Exhausting a D1, KV, Images, or Workers free quota produces bounded failure and cannot trigger paid overages.
 - [ ] NFC cards remain writable until a stable custom domain exists.
 - [ ] Mobile Chrome and Safari layouts, keyboard navigation, focus states, contrast, and reduced motion are verified.
+- [ ] Only approved Peer Advisers and Administrators reach Portal pages and Portal endpoints (section 14).
+
+## 14. Peer Adviser's Portal
+
+The Portal lives in the same Worker, uses the same Google sign-in and Sessions, and stores its data in the same D1 database. It adds no Cloudflare resource and no external service. The only new configuration is one Worker secret, `INTAKE_SECRET`, which the owner sets.
+
+### 14.1 Roles
+
+- **User:** anyone signed in with Google. Can own a Profile. Cannot open the Portal.
+- **Peer Adviser:** a User with a row in `peer_advisers`. An Administrator creates that row (approval) and deletes it (revocation).
+- **Officer:** a Peer Adviser whose `officer_position` is set. Display only; grants no right.
+- **Administrator:** a User on the `ADMIN_GOOGLE_SUBS` allowlist (up to about five). Can open the Portal without a `peer_advisers` row and can do everything below.
+
+### 14.2 Access rules
+
+| Data | Peer Adviser | Administrator |
+| --- | --- | --- |
+| Approved Teaching Kits, Courses, Directory | Read | Read |
+| Kit Drafts | Create; read and edit their own pending drafts | Read all; approve or reject |
+| Courses | Add | Add, edit, delete unused |
+| Own campus, courses taught, availability | Read and write | Read |
+| Unclaimed Advising Request | Read course, campus, topic, attendee count, times, and Matching results | Read all; assign to any Peer Adviser |
+| Claimed Advising Request | Full details and notes only if they claimed it; otherwise course, campus, status, and claimant name | Full details and notes |
+| Status, scheduled date, notes | Change only on requests they claimed | Change on any request |
+| `peer_advisers` rows, Officer positions | None | Write |
+
+Enforce the table in the data-access module, the same way the owner-scoping rule is enforced:
+
+- `requirePeerAdviser()` returns the Session's User only when it has a `peer_advisers` row or is on the Administrator allowlist; otherwise the request gets a 404 for pages and a 403 for endpoints.
+- Request functions that return advisee personal data take the authenticated Peer Adviser and check `claimed_by_user_id = <session user>` or the allowlist inside the function.
+- Claiming is one guarded update: `set claimed_by_user_id = <session user> where id = ? and claimed_by_user_id is null`. Two Peer Advisers claiming at once produce one winner.
+- Revoking approval runs one D1 batch: delete the `peer_advisers` row and set `claimed_by_user_id = null` on that User's requests whose status is `pending` or `rescheduled`.
+- Every Administrator action in the Portal (approve, revoke, assign, approve or reject a Kit Draft, set a position) writes an `admin_audit_log` entry in the same batch. Extend the `action` check constraint with these actions.
+- Tests prove that a non-approved User cannot read any Portal data, and that Peer Adviser A cannot read the personal data or notes of a request Peer Adviser B claimed.
+
+### 14.3 Data model
+
+These tables add to section 6. Conventions are the same.
+
+```sql
+create table peer_advisers (
+  user_id text primary key references users(id) on delete cascade,
+  campus text not null check (length(campus) between 1 and 64),
+  officer_position text check (length(officer_position) <= 64),
+  officer_order integer,                 -- sort order in the Directory
+  approved_by_google_sub text not null,
+  approved_at integer not null default (unixepoch())
+);
+
+create table courses (
+  code text primary key check (
+    length(code) between 2 and 16 and code not glob '*[^A-Z0-9]*'
+  ),                                     -- e.g. MATH146
+  title text not null check (length(title) between 1 and 128),
+  created_by_user_id text references users(id) on delete set null,
+  created_at integer not null default (unixepoch())
+);
+
+create table peer_adviser_courses (
+  user_id text not null references peer_advisers(user_id) on delete cascade,
+  course_code text not null references courses(code),
+  primary key (user_id, course_code)
+);
+
+-- One row per free hour; weekday 1 = Monday ... 6 = Saturday; hour 8 = 08:00-09:00 ... 16 = 16:00-17:00.
+create table peer_adviser_availability (
+  user_id text not null references peer_advisers(user_id) on delete cascade,
+  weekday integer not null check (weekday between 1 and 6),
+  hour integer not null check (hour between 8 and 16),
+  primary key (user_id, weekday, hour)
+);
+
+create table teaching_kits (
+  id text primary key,
+  course_code text not null references courses(code),
+  term text not null check (length(term) between 1 and 32),  -- e.g. 2026-2027 T1
+  current_version_id text,               -- latest approved kit_versions.id; null until first approval
+  created_at integer not null default (unixepoch()),
+  unique (course_code, term)
+);
+
+-- A Kit Draft is a kit_versions row with status 'pending'. Approved rows are immutable.
+create table kit_versions (
+  id text primary key,
+  kit_id text not null references teaching_kits(id) on delete cascade,
+  status text not null check (status in ('pending', 'approved', 'rejected')),
+  title text not null check (length(title) between 1 and 128),
+  body text not null default '' check (length(body) <= 20000),  -- Markdown, rendered without raw HTML
+  author_user_id text references users(id) on delete set null,
+  reviewed_by_google_sub text,
+  review_note text check (length(review_note) <= 1000),
+  created_at integer not null default (unixepoch()),
+  reviewed_at integer
+);
+
+create table kit_items (
+  id text primary key,
+  version_id text not null references kit_versions(id) on delete cascade,
+  kind text not null check (kind in ('pdf', 'drive', 'youtube')),
+  label text not null check (length(label) between 1 and 128),
+  url text check (url glob 'https://*'),  -- drive and youtube
+  file_id text references kit_files(id),  -- pdf
+  display_order integer not null check (display_order between 0 and 49),
+  check ((kind = 'pdf') = (file_id is not null and url is null))
+);
+
+-- One row per stored PDF; several versions may point at the same file.
+create table kit_files (
+  id text primary key,
+  kv_key text not null unique,           -- kit/<file id>.pdf
+  size_bytes integer not null check (size_bytes between 1 and 5242880),
+  uploaded_by_user_id text references users(id) on delete set null,
+  created_at integer not null default (unixepoch())
+);
+
+create table advising_requests (
+  id text primary key,
+  intake_key text not null unique,       -- SHA-256 of the form Timestamp and Email Address; makes intake idempotent
+  submitted_at integer not null,
+  campus text not null,
+  course_text text not null,             -- as typed, e.g. "Calculus 1/MATH146"
+  course_code text references courses(code),  -- parsed; null when no code was found
+  topic text not null default '',
+  attendee_count integer not null default 1 check (attendee_count between 1 and 50),
+  available_day_text text not null default '',
+  available_time_text text not null default '',
+  times_unclear integer not null default 0 check (times_unclear in (0, 1)),
+  status text not null default 'pending' check (status in (
+    'pending', 'rescheduled', 'done', 'cancelled',
+    'no_peer_adviser_available', 'no_response_from_advisee'
+  )),
+  claimed_by_user_id text references users(id) on delete set null,
+  scheduled_at integer,
+  sheet_peer_adviser text,               -- imported rows only: the Sheet's Peer Adviser text
+  sheet_remarks text,                    -- imported rows only: the full Remarks text
+  created_at integer not null default (unixepoch()),
+  updated_at integer not null default (unixepoch())
+);
+
+-- Personal data lives apart so a retention job can delete these rows and keep the request counts.
+create table advisee_contacts (
+  request_id text primary key references advising_requests(id) on delete cascade,
+  full_name text not null check (length(full_name) <= 128),
+  student_number text not null check (length(student_number) <= 16),
+  program_year text not null default '' check (length(program_year) <= 32),
+  email text not null check (length(email) <= 320),
+  cardinal_mail text not null check (length(cardinal_mail) <= 320)
+);
+
+-- Parsed or hand-set free time. Exactly one of weekday or on_date is set.
+create table advising_request_slots (
+  request_id text not null references advising_requests(id) on delete cascade,
+  weekday integer check (weekday between 1 and 6),
+  on_date text check (on_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  hour integer not null check (hour between 8 and 16),
+  check ((weekday is null) != (on_date is null))
+);
+
+create table advising_notes (
+  id text primary key,
+  request_id text not null references advising_requests(id) on delete cascade,
+  author_user_id text references users(id) on delete set null,
+  body text not null check (length(body) between 1 and 2000),
+  created_at integer not null default (unixepoch())
+);
+
+create index advising_requests_status_idx on advising_requests(status, submitted_at);
+create index advising_requests_claimed_idx on advising_requests(claimed_by_user_id);
+create index advising_request_slots_idx on advising_request_slots(request_id);
+create index kit_versions_pending_idx on kit_versions(created_at) where status = 'pending';
+```
+
+The Student's Signature answer has no column and is never stored. Account deletion deletes the User's `peer_advisers`, `peer_adviser_courses`, and `peer_adviser_availability` rows by cascade; it keeps their kit versions and notes with the author set to null.
+
+### 14.4 Advising Request intake
+
+The CSA intake Google Form cannot change, and the team may edit only the Peer Adviser, Scheduled Date, and Remarks columns of its response Sheet. The Apps Script reads the Sheet and pushes; it never writes to the Sheet, and the Worker never writes back.
+
+- `POST /api/intake/advising-requests` accepts a JSON array of at most 100 rows. It does not use `guardMutation`, because the caller is a script, not a browser Session. Instead it:
+  1. rejects bodies over 256 KiB before parsing;
+  2. compares `Authorization: Bearer <secret>` with `INTAKE_SECRET` in constant time and returns 401 on mismatch;
+  3. validates every row with Zod and drops the Student's Signature field if present;
+  4. inserts each row with `on conflict (intake_key) do nothing`, so resending a row is harmless.
+- An imported row never overwrites Portal changes. Later Sheet edits to an imported row are ignored until the product decides otherwise (see PRODUCT.md, Open Decisions).
+- **Launch import:** the same script sends every existing row in batches of 100. For these rows, map the Remarks text to one of the six statuses by its first matching status phrase (case-insensitive), default to `pending`, and keep the full text in `sheet_remarks`. Keep the Peer Adviser column in `sheet_peer_adviser`; do not guess a `claimed_by_user_id` from a name. Parse Scheduled Date (`27-Aug-25`) into `scheduled_at` when it parses, and leave it null when it doesn't.
+- **New rows** arrive from an installable "on form submit" trigger, plus a time-driven trigger every 15 minutes that resends the last day's rows to cover missed pushes.
+- Commit the Apps Script source and its install steps under `scripts/intake/`. The CSA team installs it; the owner sets `INTAKE_SECRET` in both places.
+
+### 14.5 Parsing the advisee's free time and course
+
+- The course parser looks for a course code (letters followed by digits, such as `MATH146`) in `course_text`. It sets `course_code` when the code is on the Course list; otherwise it leaves `course_code` null, and a Peer Adviser picks the Course by hand.
+- The time parser turns `available_day_text` and `available_time_text` into `advising_request_slots`. It handles weekday names and abbreviations (`Monday`, `Mon`, `MWF`, `TTh`, `Mon-Fri`), dates (`27-Aug-25`, `Aug 27`), and ranges (`1:00pm to 5:00pm`, `1-5pm`, `13:00-17:00`). Clip every range to 8:00-17:00, and round partial hours outward.
+- When the parser cannot read either field, or reads nothing, set `times_unclear = 1`. A Peer Adviser or Administrator then sets the slots by hand in the Scheduler, which clears the flag.
+- The parser is a pure function in `lib/`. Unit-test it with real anonymized examples from the Sheet, not invented ones.
+
+### 14.6 Matching
+
+`lib/matching.ts` is a pure function: given a request with its course, campus, and slots, plus the Peer Advisers with their courses, campus, availability, and open-request counts, it returns a ranked list.
+
+1. Keep only Peer Advisers who tutor `course_code` and whose campus equals the request's campus.
+2. Score each by the number of the request's slots that fall in their weekly availability. A dated slot counts when its weekday matches.
+3. Sort by score, highest first; break ties by the fewest requests they have claimed with status `pending` or `rescheduled`.
+4. Return no suggestions when `course_code` is null or `times_unclear` is set, and say why.
+
+Matching never assigns. Run it when the Scheduler loads an unclaimed request; store nothing.
+
+### 14.7 Notifying the advisee
+
+The Scheduler shows a **Notify on Teams** button on a claimed request. It opens `https://teams.microsoft.com/l/chat/0/0?users=<cardinal_mail>&message=<text>`, with the Peer Adviser's name, the Course, and the scheduled time filled in. Build the link in the browser for the claiming Peer Adviser only; the Worker sends no message and stores nothing about it.
+
+### 14.8 Teaching Kit files
+
+- Accept PDF only, at most 5 MiB. Check `Content-Length`, enforce the limit again while streaming, and require the `%PDF-` signature in the first bytes.
+- Before writing, sum `kit_files.size_bytes`. Reject the upload with a clear quota error when the total would pass 500 MB. This keeps the rest of the KV namespace for Profile images.
+- Store the bytes in KV under `kit/<file id>.pdf`. Never store a file under a user-supplied name.
+- Serve a file only to a Peer Adviser or Administrator, with `Content-Type: application/pdf`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, and `Cache-Control: private`. Never cache it publicly.
+- Delete a `kit_files` row and its KV key when no `kit_items` row points at it. Rejected drafts release their files.
+- Drive and YouTube items accept only `https://drive.google.com/`, `https://docs.google.com/`, `https://www.youtube.com/`, and `https://youtu.be/` URLs. Drive's own sharing settings decide who can open a Drive file.
+
+### 14.9 Kit Draft approval
+
+- Creating or editing a kit creates a `kit_versions` row with status `pending`. A Peer Adviser may edit their own pending draft until it is reviewed.
+- Approving runs one D1 batch: set the version to `approved` (`where status = 'pending'`), set `teaching_kits.current_version_id` to it, and write the audit entry.
+- Rejecting sets `rejected` with a required `review_note`.
+- Peer Advisers see only the `current_version_id` version of each kit; a kit with no approved version is hidden from everyone except its draft author and Administrators.
+
+### 14.10 Routes
+
+| Route | Who | Purpose |
+| --- | --- | --- |
+| `GET /portal` | Peer Adviser | Landing page: my claimed requests, kits for my courses |
+| `GET /portal/kits`, `/portal/kits/[id]` | Peer Adviser | Search kits by Course and term; read the approved version |
+| `GET /portal/kits/[id]/edit`, `/portal/kits/new` | Peer Adviser | Write a Kit Draft |
+| `GET /portal/scheduler` | Peer Adviser | Advising Requests, filterable by status, Course, campus, and claimant |
+| `GET /portal/directory` | Peer Adviser | Peer Advisers and Officers by position |
+| `GET /portal/me` | Peer Adviser | Campus, courses taught, weekly availability grid |
+| `GET /admin/peer-advisers` | Administrator | Approve, revoke, set campus and Officer position |
+| `GET /admin/kit-drafts` | Administrator | Review pending Kit Drafts |
+| `POST /api/portal/...` | Peer Adviser | Claim, give back, set status, scheduled date, slots, notes; Kit Draft writes; file upload; Course add; own availability |
+| `POST /api/admin/...` | Administrator | Approve or revoke a Peer Adviser, assign a request, review a Kit Draft |
+| `POST /api/intake/advising-requests` | Apps Script | Intake (section 14.4) |
+
+Every browser mutation above goes through `guardMutation`, then `requirePeerAdviser()` or the Administrator check. Portal pages send `Cache-Control: private, no-store` and `noindex`.
