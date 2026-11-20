@@ -5,14 +5,19 @@ import { getCurrentAccount } from "@/lib/auth/current-user";
 import { guardMutation } from "@/lib/http/mutation-guard";
 import { getDb } from "@/lib/db";
 import { purgeProfilePage } from "@/lib/edge-cache";
+import { evaluationFormUrl, isCsaEvaluationForm } from "@/lib/evaluation-form";
 import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, reservedSlugs } from "@/lib/db/schema";
 
 export async function POST(request: Request) {
   const guard = await guardMutation(request, getCurrentAccount, { body: false });
   if (!guard.ok) return guard.response;
   const profile = guard.account.profile;
-  if (!profile.slug || !profile.displayName || !profile.role || !profile.evaluationUrl) return NextResponse.json({ error: "Add a permanent address, name, role, and evaluation form before publishing" }, { status: 400 });
+  if (!profile.slug || !profile.displayName || !profile.role) return NextResponse.json({ error: "Add a permanent address, name, and role before publishing" }, { status: 400 });
   if (profile.status === "suspended") return NextResponse.json({ error: "This profile is suspended" }, { status: 403 });
+  const evaluationUrl = profile.evaluationUrl || evaluationFormUrl;
+  const usesCsaForm = isCsaEvaluationForm(evaluationUrl);
+  if (usesCsaForm && !profile.studentNumber) return NextResponse.json({ error: "Add your student number before publishing with the CSA evaluation form" }, { status: 400 });
+  if (profile.showStudentNumber && !profile.studentNumber) return NextResponse.json({ error: "Enter a student number or turn off its display before publishing" }, { status: 400 });
   const db = getDb();
   const [reservation] = await db.select().from(reservedSlugs).where(eq(reservedSlugs.slug, profile.slug)).limit(1);
   if (reservation && reservation.profileId !== profile.id) return NextResponse.json({ error: "That permanent profile address is already taken" }, { status: 409 });
@@ -26,7 +31,7 @@ export async function POST(request: Request) {
     db.insert(reservedSlugs).values({ slug: profile.slug, profileId: profile.id, createdAt: now }).onConflictDoNothing(),
     db.delete(publishedSocialLinks).where(eq(publishedSocialLinks.profileId, profile.id)),
     db.delete(publishedProfiles).where(eq(publishedProfiles.profileId, profile.id)),
-    db.insert(publishedProfiles).values({ profileId: profile.id, slug: profile.slug, displayName: profile.displayName, role: profile.role, bio: profile.bio, accentColor: profile.accentColor, avatarKey: profile.avatarKey, backgroundKey: profile.backgroundKey, evaluationUrl: profile.evaluationUrl, publishedAt: now }),
+    db.insert(publishedProfiles).values({ profileId: profile.id, slug: profile.slug, displayName: profile.displayName, role: profile.role, bio: profile.bio, accentColor: profile.accentColor, appearance: profile.appearance, avatarKey: profile.avatarKey, backgroundKey: profile.backgroundKey, evaluationUrl, studentNumber: usesCsaForm || profile.showStudentNumber ? profile.studentNumber : null, showStudentNumber: profile.showStudentNumber, publishedAt: now }),
     ...links.map((link) => db.insert(publishedSocialLinks).values({ id: crypto.randomUUID(), profileId: profile.id, service: link.service, url: link.url, displayOrder: link.displayOrder })),
     setPublished,
     db.delete(publishedProfiles).where(and(eq(publishedProfiles.profileId, profile.id), exists(db.select({ id: profiles.id }).from(profiles).where(and(eq(profiles.id, profile.id), eq(profiles.status, "suspended")))))),

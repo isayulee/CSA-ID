@@ -1,3 +1,4 @@
+import type { ProfileAppearance } from "@/lib/profile-appearance";
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -31,6 +32,9 @@ export const profiles = sqliteTable("profiles", {
   avatarKey: text("avatar_key"),
   backgroundKey: text("background_key"),
   evaluationUrl: text("evaluation_url"),
+  studentNumber: text("student_number"),
+  showStudentNumber: integer("show_student_number", { mode: "boolean" }).notNull().default(false),
+  appearance: text("appearance", { mode: "json" }).$type<ProfileAppearance>(),
   status: text("status", { enum: ["draft", "published", "suspended"] }).notNull().default("draft"),
   createdAt: integer("created_at").notNull().default(unixNow),
   updatedAt: integer("updated_at").notNull().default(unixNow),
@@ -59,6 +63,9 @@ export const publishedProfiles = sqliteTable("published_profiles", {
   avatarKey: text("avatar_key"),
   backgroundKey: text("background_key"),
   evaluationUrl: text("evaluation_url").notNull(),
+  studentNumber: text("student_number"),
+  showStudentNumber: integer("show_student_number", { mode: "boolean" }).notNull().default(false),
+  appearance: text("appearance", { mode: "json" }).$type<ProfileAppearance>(),
   publishedAt: integer("published_at").notNull().default(unixNow),
 });
 
