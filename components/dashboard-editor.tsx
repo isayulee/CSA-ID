@@ -203,11 +203,11 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
               <label className="field">
                 Your student number
                 <input type="text" inputMode="numeric" autoComplete="off" maxLength={32} value={studentNumber} onChange={(event) => setStudentNumber(event.target.value)} />
-                {usesCsaForm && <small>Required for CSA evaluation prefill. Visitors can see it in the evaluation form. Use Last Name, First Name for your display name.</small>}
+                {usesCsaForm && <small>Required for CSA evaluation prefill. Use Last Name, First Name for your display name.</small>}
               </label>
               <label className="studentNumberVisibility">
                 <input type="checkbox" checked={showStudentNumber} onChange={(event) => setShowStudentNumber(event.target.checked)} />
-                <span>Show student number on my public profile<small>Applies when you publish.</small></span>
+                <span>Show student number on my public profile card<small>{usesCsaForm ? "When you publish with the CSA evaluation form, visitors can see your student number in the form and in the public page source, even if this setting is off." : "Applies when you publish."}</small></span>
               </label>
             </div>
             <label className="field">Permanent profile address<div className="slugField"><span>/id/</span><input value={slug} disabled={Boolean(claimedSlug)} maxLength={64} aria-label="Profile slug" onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} />{!claimedSlug && <button className="buttonSecondary buttonSmall" disabled={busy || slug.length < 3} type="button" onClick={claim}>Claim address</button>}</div><small role={slugError ? "alert" : undefined}>{slugError || (claimedSlug ? "This permanent address is locked." : "Choose carefully. Once claimed, this address can never change.")}</small></label>

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1385c972-548d-4d98-8dfa-67d6f35b2f35",
+  "id": "e9ca1a80-04a6-4dff-a634-d9f9af5b6fbc",
   "prevId": "142702c8-3665-4bdc-99d4-f55083016788",
   "tables": {
     "abuse_reports": {
@@ -327,6 +327,21 @@
           "notNull": false,
           "autoincrement": false
         },
+        "show_student_number": {
+          "name": "show_student_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "appearance": {
+          "name": "appearance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -460,6 +475,21 @@
         },
         "student_number": {
           "name": "student_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "show_student_number": {
+          "name": "show_student_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "appearance": {
+          "name": "appearance",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
