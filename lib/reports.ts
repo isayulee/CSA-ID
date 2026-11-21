@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { z } from "zod";
 import * as schema from "@/lib/db/schema";
-import { loadPublishedProfile } from "@/lib/public/published-profile";
 
 export const MAX_BODY_BYTES = 4096;
 export const IP_WINDOW_SECONDS = 60;
@@ -77,11 +76,8 @@ export async function submitReport(raw: unknown, ip: string | null, deps: Submit
   if (challenge === "unavailable") return fail(503, "Reporting is unavailable right now");
   if (challenge === "rejected") return fail(400, "Challenge failed. Reload the page and try again");
 
-  // Only a Published Profile can be reported. Draft, unpublished and suspended Slugs get
-  // the same 404 as an unknown one, so the response never reveals which Slugs exist.
-  const published = await loadPublishedProfile(deps.db, slug);
-  if (!published) return fail(404, "Profile not found");
-  const profileId = published.profileId;
+  const profile = await deps.db.select({ id: schema.profiles.id }).from(schema.profiles).where(sql`${schema.profiles.slug} = ${slug}`).limit(1);
+  if (!profile[0]) return fail(404, "Profile not found");
 
   // One statement: the caps are counted and the row inserted atomically in D1, so
   // concurrent requests that slip past the eventually consistent KV check still hit these.
@@ -89,8 +85,8 @@ export async function submitReport(raw: unknown, ip: string | null, deps: Submit
   const since = now - WINDOW_SECONDS;
   const result = await deps.db.run(sql`
     INSERT INTO abuse_reports (id, profile_id, reason, details, status, created_at)
-    SELECT ${crypto.randomUUID()}, ${profileId}, ${reason}, ${details}, 'open', ${now}
-    WHERE (SELECT count(*) FROM abuse_reports WHERE profile_id = ${profileId} AND created_at > ${since}) < ${MAX_PER_PROFILE_PER_WINDOW}
+    SELECT ${crypto.randomUUID()}, ${profile[0].id}, ${reason}, ${details}, 'open', ${now}
+    WHERE (SELECT count(*) FROM abuse_reports WHERE profile_id = ${profile[0].id} AND created_at > ${since}) < ${MAX_PER_PROFILE_PER_WINDOW}
       AND (SELECT count(*) FROM abuse_reports WHERE created_at > ${since}) < ${MAX_TOTAL_PER_WINDOW}`);
   if (!result.meta.changes) return fail(429, "Too many reports right now. Please try again later");
 

@@ -1,6 +1,6 @@
 # Digital Profile
 
-The language of the CSA's peer-advising product: public identity pages that people open from an NFC card, and the Peer Advisers' private Portal for Teaching Kits and Advising Requests.
+The public identity-page context for people who publish selected contact information and optionally open the page using an NFC card.
 
 ## Language
 
@@ -43,51 +43,3 @@ _Avoid_: Complaint, flag
 **NFC Card**:
 An independently programmed physical tag containing a Profile's public URL; it is not registered or managed by the system.
 _Avoid_: Profile, account, managed card
-
-## Peer advising
-
-**Peer Adviser**:
-A Mapúa CSA student who tutors fellow students: a User whom an Administrator has approved to use the Portal.
-_Avoid_: Student assistant, tutor, mentor
-
-**Portal**:
-The signed-in workspace only Peer Advisers can open, holding Teaching Kits, the Directory, the Scheduler and Matching.
-_Avoid_: Dashboard, admin panel
-
-**Directory**:
-The Portal's list of Peer Advisers, with Officers arranged by position to show the CSA's organizational structure.
-_Avoid_: Org chart, roster, members list
-
-**Officer**:
-A Peer Adviser who holds a named position in the CSA's organizational structure; the position grants no extra rights.
-_Avoid_: Admin, moderator
-
-**Teaching Kit**:
-A set of study materials for one course and academic term that Peer Advisers use in tutoring sessions.
-_Avoid_: Module, resource pack, course kit
-
-**Kit Draft**:
-Proposed changes to a Teaching Kit that wait for an Administrator's approval while the last approved version stays in use.
-_Avoid_: Pending kit, kit revision, suggestion
-
-**Course**:
-A Mapúa course on the shared list, identified by its course code (for example MATH146), that Teaching Kits, Peer Advisers and Advising Requests refer to.
-_Avoid_: Subject, class
-
-**Advising Request**:
-One advisee's submission of the CSA intake Google Form asking for a tutoring session.
-_Avoid_: Booking, consultation, appointment, session request
-
-**Peer Advising Scheduler**:
-The Portal view where Peer Advisers see, claim and schedule Advising Requests.
-_Avoid_: Queue, calendar, booking system
-
-**Matching**:
-The Portal's ranked suggestion of Peer Advisers for an unassigned Advising Request; a person still makes the assignment.
-_Avoid_: Auto-assign, pairing algorithm
-
-## Relationships
-
-- A **Peer Adviser** is a **User** and owns one **Profile**
-- An **Officer** is a **Peer Adviser**; an **Administrator** is a separate trust grant, not a position
-- A **Teaching Kit** belongs to one course and one academic term

@@ -1,12 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { EvaluationPrefill } from "@/components/evaluation-prefill";
 import { MapuaSquares } from "@/components/mapua-squares";
 import { SocialIcon, type SocialPlatform } from "@/components/social-icon";
 import { getDb } from "@/lib/db";
-import { evaluationFormUrl, isCsaEvaluationForm } from "@/lib/evaluation-form";
-import { profileAppearanceStyle } from "@/lib/profile-appearance";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
 
 // Profiles stay dynamic; the Worker caches only complete HTML documents.
@@ -14,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Mapúa CSA profile", robots: { index: false, follow: false } };
 
 const demo = {
-  profileId: "demo", slug: "demo", displayName: "Alex Santos", role: "Student assistant", bio: "Peer adviser for tutoring sessions at the Center for Student Advising.", accentColor: "#B5121B", avatarKey: null, backgroundKey: null, evaluationUrl: evaluationFormUrl, studentNumber: null, showStudentNumber: false, appearance: null,
+  profileId: "demo", slug: "demo", displayName: "Alex Santos", role: "Student assistant", bio: "Peer adviser for tutoring sessions at the Center for Student Advising.", accentColor: "#B5121B", avatarKey: null, backgroundKey: null, evaluationUrl: "https://forms.example/evaluation",
   links: [
     { service: "linkedin", url: "https://linkedin.com" }, { service: "instagram", url: "https://instagram.com" }, { service: "facebook", url: "https://facebook.com" }, { service: "github", url: "https://github.com" }, { service: "website", url: "https://example.com" },
   ],
@@ -38,15 +35,11 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     <main className="publicProfile" data-has-user-background={Boolean(backgroundUrl)} style={{ "--profile-background-image": backgroundUrl ? `url(${backgroundUrl})` : "none", "--profile-accent": profile.accentColor } as React.CSSProperties}>
       <Link className="publicBack" href="/" aria-label="Back to home"><span aria-hidden="true">&larr;</span>Back to home</Link>
       <div className="publicBackdrop" aria-hidden="true"><MapuaSquares className="publicSquares publicSquaresPrimary" /><MapuaSquares className="publicSquares publicSquaresSecondary" /></div>
-      <section className="publicCard" style={profileAppearanceStyle(profile.appearance)}>
+      <section className="publicCard">
         <Image className="publicCsaLogo" src="/brand/csa-logo.jpg" width={64} height={64} alt="Mapúa University Center for Student Advising" />
         <div className="publicAvatar" style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>{avatarUrl ? "" : initials}</div>
-        <h1>{profile.displayName}</h1><p className="publicKicker">{profile.role}</p>
-        {profile.showStudentNumber && profile.studentNumber && <p className="profileStudentNumber">Student number {profile.studentNumber}</p>}
-        <p className="publicBio">{profile.bio}</p>
-        {isCsaEvaluationForm(profile.evaluationUrl) ? <EvaluationPrefill adviserName={profile.displayName} studentNumber={profile.studentNumber} /> : (
-          <a className="evaluationButton" href={profile.evaluationUrl} target="_blank" rel="noreferrer">Open session evaluation <SocialIcon className="buttonExternalIcon" platform="external" /></a>
-        )}
+        <h1>{profile.displayName}</h1><p className="publicKicker">{profile.role}</p><p className="publicBio">{profile.bio}</p>
+        <a className="evaluationButton" href={profile.evaluationUrl} target="_blank" rel="noreferrer">Open session evaluation <SocialIcon className="buttonExternalIcon" platform="external" /></a>
         {profile.links.length > 0 && <nav className="publicLinks" aria-label={`${profile.displayName} links`}>{profile.links.map(({ service, url }) => <a href={url} target="_blank" rel="noreferrer" key={service} aria-label={`Open ${labels[service] || service} in a new tab`}><span className="socialLinkLabel"><SocialIcon platform={(service in labels ? service : "website") as SocialPlatform} />{labels[service] || service}</span><SocialIcon className="externalLinkIcon" platform="external" /></a>)}</nav>}
         <a className="saveContact publicSave" href={`data:text/vcard;charset=utf-8,${encodeURIComponent(`BEGIN:VCARD\nVERSION:3.0\nFN:${profile.displayName}\nTITLE:${profile.role}\nEND:VCARD`)}`} download={`${slug}.vcf`}>Save contact</a>
         <p className="providedNotice">This profile contains user-provided information.</p><Link className="reportLink" href={`/report?profile=${encodeURIComponent(slug)}`}>Report this profile</Link>

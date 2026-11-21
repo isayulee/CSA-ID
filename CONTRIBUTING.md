@@ -228,7 +228,7 @@ Cloudflare Workers Builds builds every pull request branch and uploads it as a p
 **The preview uses the live database.** It runs on the same Worker as the live site and shares its D1 database and KV namespace, so everything you do there changes real data:
 
 - Use only your own test accounts and test Profiles.
-- Never file an Abuse Report, delete, unpublish or edit a real Peer Adviser's Profile, and never touch real Advising Requests or Teaching Kits.
+- Never file an Abuse Report, delete, unpublish or edit a real student assistant's Profile.
 - Never run account deletion, bulk changes or load tests against a preview. Do that locally.
 
 Google sign-in and the report form's Turnstile check may not work on a preview URL, because Google and Turnstile only accept the hostnames registered for the live site. Test signed-in flows locally with the local development account.

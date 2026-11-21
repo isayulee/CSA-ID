@@ -16,7 +16,7 @@ export async function readDraft(db: Db, userId: string) {
 export async function saveDraft(db: Db, userId: string, input: ProfileInput) {
   const [profile] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!profile) return false;
-  const update = db.update(profiles).set({ displayName: input.displayName, role: input.role, bio: input.bio, accentColor: input.accentColor.toUpperCase(), appearance: input.appearance, evaluationUrl: input.evaluationUrl || null, showStudentNumber: input.showStudentNumber, studentNumber: input.studentNumber === undefined ? undefined : input.studentNumber || null, updatedAt: Math.floor(Date.now() / 1000) }).where(and(eq(profiles.id, profile.id), eq(profiles.userId, userId)));
+  const update = db.update(profiles).set({ displayName: input.displayName, role: input.role, bio: input.bio, accentColor: input.accentColor.toUpperCase(), evaluationUrl: input.evaluationUrl || null, updatedAt: Math.floor(Date.now() / 1000) }).where(and(eq(profiles.id, profile.id), eq(profiles.userId, userId)));
   const removeLinks = db.delete(draftSocialLinks).where(eq(draftSocialLinks.profileId, profile.id));
   const inserts = input.links.map((link, index) => db.insert(draftSocialLinks).values({ id: crypto.randomUUID(), profileId: profile.id, service: link.service, url: link.url, displayOrder: index }));
   await db.batch([update, removeLinks, ...inserts] as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
