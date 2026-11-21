@@ -1,4 +1,3 @@
-import type { ProfileAppearance } from "@/lib/profile-appearance";
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -32,9 +31,6 @@ export const profiles = sqliteTable("profiles", {
   avatarKey: text("avatar_key"),
   backgroundKey: text("background_key"),
   evaluationUrl: text("evaluation_url"),
-  studentNumber: text("student_number"),
-  showStudentNumber: integer("show_student_number", { mode: "boolean" }).notNull().default(false),
-  appearance: text("appearance", { mode: "json" }).$type<ProfileAppearance>(),
   status: text("status", { enum: ["draft", "published", "suspended"] }).notNull().default("draft"),
   createdAt: integer("created_at").notNull().default(unixNow),
   updatedAt: integer("updated_at").notNull().default(unixNow),
@@ -63,9 +59,6 @@ export const publishedProfiles = sqliteTable("published_profiles", {
   avatarKey: text("avatar_key"),
   backgroundKey: text("background_key"),
   evaluationUrl: text("evaluation_url").notNull(),
-  studentNumber: text("student_number"),
-  showStudentNumber: integer("show_student_number", { mode: "boolean" }).notNull().default(false),
-  appearance: text("appearance", { mode: "json" }).$type<ProfileAppearance>(),
   publishedAt: integer("published_at").notNull().default(unixNow),
 });
 
@@ -98,22 +91,5 @@ export const reservedSlugs = sqliteTable("reserved_slugs", {
   createdAt: integer("created_at").notNull().default(unixNow),
 });
 
-// Append-only (triggers in the migration reject UPDATE and DELETE). Actor and
-// target are plain values, not foreign keys, so entries survive account deletion.
-export const adminAuditLog = sqliteTable("admin_audit_log", {
-  id: text("id").primaryKey(),
-  actorGoogleSub: text("actor_google_sub").notNull(),
-  action: text("action", { enum: ["suspend", "unsuspend", "remove_images", "resolve_report"] }).notNull(),
-  targetProfileId: text("target_profile_id").notNull(),
-  targetSlug: text("target_slug"),
-  reason: text("reason").notNull(),
-  createdAt: integer("created_at").notNull().default(unixNow),
-}, (table) => [
-  index("admin_audit_log_target_idx").on(table.targetProfileId),
-  check("admin_audit_log_action_check", sql`${table.action} IN ('suspend','unsuspend','remove_images','resolve_report')`),
-  check("admin_audit_log_reason_check", sql`length(${table.reason}) BETWEEN 1 AND 1000`),
-]);
-
-export type AdminAuditAction = typeof adminAuditLog.$inferInsert["action"];
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;

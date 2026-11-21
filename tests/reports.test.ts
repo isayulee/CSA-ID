@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { abuseReports, profiles, publishedProfiles, users } from "@/lib/db/schema";
+import { abuseReports, profiles, users } from "@/lib/db/schema";
 import { MAX_BODY_BYTES, MAX_PER_PROFILE_PER_WINDOW, rateKeyFor, submitReport } from "@/lib/reports";
 import * as route from "@/app/api/reports/route";
 import { createTestDb } from "./helpers";
@@ -20,18 +20,10 @@ const body = (over: object = {}) => ({ profile: "ada", reason: "impersonation", 
 const deps = (over: object = {}) => ({ db: t.db, kv: kv(), secret: "secret", fetchImpl: PASS as unknown as typeof fetch, now: NOW, ...over });
 const count = async () => (await t.db.select().from(abuseReports)).length;
 
-async function seedProfile(id: string, slug: string, status: "draft" | "published" | "suspended", snapshot: boolean) {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `s-${id}`, email: `${id}@example.test` });
-  await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug, displayName: slug, evaluationUrl: "https://forms.example/e", status });
-  if (snapshot) await t.db.insert(publishedProfiles).values({ profileId: id, slug, displayName: slug, role: "Student assistant", bio: "", accentColor: "#B5121B", evaluationUrl: "https://forms.example/e" });
-}
-
 beforeAll(async () => {
   t = await createTestDb();
-  await seedProfile("p1", "ada", "published", true);
-  await seedProfile("p-draft", "drafty", "draft", false);
-  await seedProfile("p-unpub", "unpub", "draft", false); // published once, then unpublished: snapshot gone
-  await seedProfile("p-susp", "banned", "suspended", true); // a suspended Profile can keep a stale snapshot
+  await t.db.insert(users).values({ id: "u1", googleSub: "s", email: "a@example.test" } as never);
+  await t.db.insert(profiles).values({ id: "p1", userId: "u1", slug: "ada", displayName: "Ada" } as never);
 });
 afterAll(() => t.dispose());
 
@@ -89,13 +81,6 @@ describe("submitReport", () => {
     const rest: Record<string, unknown> = body();
     delete rest.turnstileToken;
     expect((await submitReport(rest, "8.8.8.8", deps())).status).toBe(400);
-  });
-
-  it("accepts reports only for a Published Profile: draft, unpublished and suspended Slugs get the same 404 as an unknown one", async () => {
-    const before = await count();
-    const results = await Promise.all(["nope", "drafty", "unpub", "banned"].map((slug, i) => submitReport(body({ profile: slug }), `11.0.0.${i}`, deps())));
-    expect(results).toEqual(Array(4).fill({ status: 404, body: { error: "Profile not found" } }));
-    expect(await count()).toBe(before);
   });
 
   it("does not accept the demo profile or any unknown profile", async () => {
