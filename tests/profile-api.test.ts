@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { draftSocialLinks, profiles, reservedSlugs } from "@/lib/db/schema";
 import { findOrCreateUser } from "@/lib/auth/users";
 import { createTestDb } from "./helpers";
+import { defaultAppearance, type ProfileAppearance } from "@/lib/profile-appearance";
+import { loadPublishedProfile } from "@/lib/public/published-profile";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 let t: TestDb;
@@ -29,7 +31,7 @@ function req(method: string, path: string, body?: unknown, headers: Record<strin
 
 const validProfile = (name: string) => ({ displayName: name, role: "Role", bio: "", accentColor: "#B5121B", evaluationUrl: "", links: [{ service: "github", url: `https://github.com/${name}` }] });
 
-type Body = { error: string; profile: { displayName: string }; links: Array<{ url: string }> };
+type Body = { error: string; profile: { displayName: string; studentNumber: string | null; showStudentNumber: boolean; appearance: ProfileAppearance | null }; links: Array<{ url: string }> };
 const json = async (res: Response) => (await res.json()) as Body;
 
 let profileRoute: typeof import("@/app/api/profile/route");
@@ -47,18 +49,25 @@ beforeEach(() => { current = A; });
 
 describe("profile isolation (#5)", () => {
   it("User A's GET and PUT only ever touch A's rows", async () => {
-    expect((await profileRoute.PUT(req("PUT", "/api/profile", validProfile("alice")))).status).toBe(200);
+    const appearance = { ...defaultAppearance, cardColor: "#183726", cardOpacity: 78, frosted: true };
+    expect((await profileRoute.PUT(req("PUT", "/api/profile", { ...validProfile("alice"), studentNumber: "0012345678", showStudentNumber: true, appearance }))).status).toBe(200);
     current = B;
     expect((await profileRoute.PUT(req("PUT", "/api/profile", validProfile("bob")))).status).toBe(200);
 
     current = A;
     const a = await json(await profileRoute.GET());
     expect(a.profile.displayName).toBe("alice");
+    expect(a.profile.studentNumber).toBe("0012345678");
+    expect(a.profile.showStudentNumber).toBe(true);
+    expect(a.profile.appearance).toEqual(appearance);
     expect(a.links.map((l) => l.url)).toEqual(["https://github.com/alice"]);
 
     current = B;
     const b = await json(await profileRoute.GET());
     expect(b.profile.displayName).toBe("bob");
+    expect(b.profile.studentNumber).toBeNull();
+    expect(b.profile.showStudentNumber).toBe(false);
+    expect(b.profile.appearance).toBeNull();
     expect(b.links.map((l) => l.url)).toEqual(["https://github.com/bob"]);
   });
 
@@ -84,6 +93,31 @@ describe("profile isolation (#5)", () => {
     expect((await profileRoute.PUT(req("PUT", "/api/profile", validProfile("x")))).status).toBe(401);
     expect((await slugRoute.POST(req("POST", "/api/profile/slug", { slug: "whoever" }))).status).toBe(401);
   });
+});
+
+it("changes student number visibility only on publish and keeps CSA prefill available", async () => {
+  const adviser = { user: { id: "" }, profile: { id: "" } };
+  await makeAccount("visibility-adviser", adviser);
+  const slug = "visibility-adviser";
+  await t.db.update(profiles).set({ slug, studentNumber: "0012345678" }).where(eq(profiles.id, adviser.profile.id));
+  const publish = await import("@/app/api/profile/publish/route");
+  async function publishDraft() {
+    const [profile] = await t.db.select().from(profiles).where(eq(profiles.id, adviser.profile.id));
+    current = { user: adviser.user, profile };
+    expect((await publish.POST(req("POST", "/api/profile/publish"))).status).toBe(200);
+  }
+
+  await publishDraft();
+  expect(await loadPublishedProfile(t.db, slug)).toMatchObject({ studentNumber: "0012345678", showStudentNumber: false });
+
+  await t.db.update(profiles).set({ showStudentNumber: true }).where(eq(profiles.id, adviser.profile.id));
+  expect(await loadPublishedProfile(t.db, slug)).toMatchObject({ showStudentNumber: false });
+  await publishDraft();
+  expect(await loadPublishedProfile(t.db, slug)).toMatchObject({ studentNumber: "0012345678", showStudentNumber: true });
+
+  await t.db.update(profiles).set({ showStudentNumber: false }).where(eq(profiles.id, adviser.profile.id));
+  await publishDraft();
+  expect(await loadPublishedProfile(t.db, slug)).toMatchObject({ studentNumber: "0012345678", showStudentNumber: false });
 });
 
 describe("mutation guard", () => {
