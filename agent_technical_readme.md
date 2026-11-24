@@ -136,11 +136,13 @@ SQLite conventions used here:
 - Enumerations are `text` columns with `check (... in (...))`.
 - Booleans are `integer` 0 or 1.
 - SQLite has no regular expressions in D1, so format checks use `length` and `glob`. The server-side Zod validation in section 7 remains the full rule.
+- D1 rejects a `GLOB` or `LIKE` pattern longer than 50 bytes and a compound `SELECT` (`UNION`) with more than 5 terms. Split longer checks and queries.
 - D1 enforces foreign keys.
 - A table that other tables reference is a **parent table**. Get its checks and defaults right the first time: see "Migration rules" below for why changing them later is dangerous.
 
 ```sql
--- HEX stands for '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'.
+-- HEX(c) stands for (length(c) = 7 and c glob '#*' and substr(c, 2) not glob '*[^0-9A-Fa-f]*').
+-- One glob of six character classes would be clearer, but D1 rejects GLOB patterns over 50 bytes.
 
 -- Root of every cascade: keep checks few and certain.
 create table users (
@@ -179,9 +181,9 @@ create table profiles (
   display_name text not null default '' check (length(display_name) <= 128),
   role_title text not null default '' check (length(role_title) <= 128),
   bio text not null default '' check (length(bio) <= 500),
-  accent_color text not null default '#B5121B' check (accent_color glob HEX),
-  icon_color text check (icon_color is null or icon_color glob HEX),
-  card_color text check (card_color is null or card_color glob HEX),
+  accent_color text not null default '#B5121B' check (HEX(accent_color)),
+  icon_color text check (icon_color is null or HEX(icon_color)),
+  card_color text check (card_color is null or HEX(card_color)),
   card_opacity integer check (card_opacity is null or card_opacity between 70 and 100),
   card_frosted integer check (card_frosted is null or card_frosted in (0, 1)),
   avatar_key text,
