@@ -1,0 +1,13 @@
+// PROTOTYPE, wipe me. A throwaway local D1 for rehearsing the cutover. Never use with --remote.
+{
+  "name": "prototype-wipe-me",
+  "compatibility_date": "2025-11-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "PROTOTYPE-wipe-me-restore",
+      "database_id": "00000000-0000-4000-8000-0000000beef0",
+      "migrations_dir": "../../migrations"
+    }
+  ]
+}
