@@ -408,6 +408,7 @@ if [[ -z "$NEW_SUBDOMAIN" ]] || ! confirm "Is the new address $(new_origin)?"; t
   ask_valid NEW_SUBDOMAIN "The shared account's workers.dev subdomain:" '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' \
     "Lowercase letters, digits and inner hyphens only."
 fi
+write_env NEW_SUBDOMAIN "$NEW_SUBDOMAIN" # Part 3 names the new address, on this machine
 show "wrangler whoami"
 "$WR" whoami || true
 say "wrangler.jsonc sends every command to account $NEW_ACCOUNT_ID: the shared team account."
