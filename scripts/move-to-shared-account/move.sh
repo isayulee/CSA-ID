@@ -241,6 +241,43 @@ when() { node -e 'console.log(new Date(Number(process.argv[1]) * 1000).toLocaleS
 UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 HEX32='^[0-9a-f]{32}$'
 
+# Each command names its account through a config's account_id and its login through as_old / as_new.
+# Nothing inherited may redirect either: not an account id, not an API token (which would override
+# every login), not a profile.
+clean_cloudflare_env() {
+  local v set=""
+  for v in CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID CLOUDFLARE_API_TOKEN CF_API_TOKEN CLOUDFLARE_API_KEY CF_API_KEY \
+           CLOUDFLARE_EMAIL CF_EMAIL CLOUDFLARE_AUTH_PROFILE; do
+    [[ -n "${!v:-}" ]] && set+=" $v"
+    unset "$v"
+  done
+  [[ -z "$set" ]] || note "Ignoring these variables from your shell:$set (the move signs in through wrangler profiles)."
+}
+
+# sign_in_help old|new: how to sign in to the account that failed the preflight.
+sign_in_help() {
+  if [[ "$1" == old ]]; then
+    warn "No wrangler login reaches ymsrubio's personal account ($OLD_ACCOUNT_ID)."
+    note "Sign in as the login that owns it:  npx wrangler auth create csa-old"
+  else
+    warn "No wrangler login reaches the shared team account ($NEW_ACCOUNT_ID)."
+    note "Sign in as the login that belongs to it (isayulee's):  npx wrangler auth create csa-shared"
+  fi
+  note "A browser opens for the sign-in. One login that sees both accounts also works: run the command for either."
+}
+
+# preflight_logins old|both: prove each needed login reaches its own account, read only, before anything moves.
+preflight_logins() {
+  show "wrangler whoami --json   (once per login, read only)"
+  OLD_PROFILE=""; NEW_PROFILE=""
+  find_login OLD_PROFILE "$OLD_ACCOUNT_ID" csa-old || { sign_in_help old; exit 1; }
+  if [[ "$1" == both ]]; then
+    find_login NEW_PROFILE "$NEW_ACCOUNT_ID" csa-shared || { sign_in_help new; exit 1; }
+  fi
+  say "✓ Old account $OLD_ACCOUNT_ID: login \"$OLD_PROFILE\""
+  [[ "$1" != both ]] || say "✓ Shared account $NEW_ACCOUNT_ID: login \"$NEW_PROFILE\""
+}
+
 write_old_config() {
   mkdir -p "$OUT"
   cat > "$OLD_CFG" <<EOF
@@ -409,15 +446,15 @@ if [[ -z "$NEW_SUBDOMAIN" ]] || ! confirm "Is the new address $(new_origin)?"; t
     "Lowercase letters, digits and inner hyphens only."
 fi
 write_env NEW_SUBDOMAIN "$NEW_SUBDOMAIN" # Part 3 names the new address, on this machine
-show "wrangler whoami"
-"$WR" whoami || true
 say "wrangler.jsonc sends every command to account $NEW_ACCOUNT_ID: the shared team account."
-ask_valid OLD_ACCOUNT_ID "ymsrubio's personal account ID (the old one), from the list above:" "$HEX32" \
+step "The old account's ID is on its dashboard (Workers & Pages → Account ID), or in 'wrangler whoami'."
+ask_valid OLD_ACCOUNT_ID "ymsrubio's personal account ID (the old one):" "$HEX32" \
   "An Account ID is 32 characters of 0-9 and a-f."
 if [[ "$OLD_ACCOUNT_ID" == "$NEW_ACCOUNT_ID" ]]; then
   warn "That's the shared account. The old one is where $OLD_ORIGIN runs."
   exit 1
 fi
+preflight_logins both
 write_env OLD_ACCOUNT_ID "$OLD_ACCOUNT_ID"
 write_old_config
 load NFC_SLUG SWITCHED_AT OLD_APP_VERSION
@@ -500,7 +537,7 @@ evening_7() {
 stage "Shared account: deploy the app and set its secrets"
 say "Deploys main to $(new_origin). Nobody is sent there until stage 9."
 confirm "Build and deploy now?" || exit 1
-must "The deploy failed. Fix it, then: bash $0 evening 7" npm run deploy
+must "The deploy failed. Fix it, then: bash $0 evening 7" as_new npm run deploy
 say "Now the four secrets. They go straight to Cloudflare and are never written to disk."
 ask GOOGLE_CLIENT_ID "Google OAuth client ID (the existing client's):"
 note "Google Cloud → Credentials → the OAuth client. If its secret isn't saved anywhere, add a new"
@@ -514,7 +551,7 @@ GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET
   ADMIN_GOOGLE_SUBS="$ADMIN_GOOGLE_SUBS" TURNSTILE_SECRET_KEY="$TURNSTILE_SECRET_KEY" \
   node -e 'const e = process.env; process.stdout.write(JSON.stringify({ GOOGLE_CLIENT_ID: e.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: e.GOOGLE_CLIENT_SECRET, ADMIN_GOOGLE_SUBS: e.ADMIN_GOOGLE_SUBS,
-    TURNSTILE_SECRET_KEY: e.TURNSTILE_SECRET_KEY }))' | "$WR" secret bulk || ok=$?
+    TURNSTILE_SECRET_KEY: e.TURNSTILE_SECRET_KEY }))' | as_new "$WR" secret bulk || ok=$?
 unset GOOGLE_CLIENT_SECRET TURNSTILE_SECRET_KEY
 ((ok == 0)) || { warn "Setting the secrets failed. Re-run: bash $0 evening 7 (deploying again is harmless)"; exit 1; }
 pause
@@ -558,7 +595,7 @@ else
     # Record the app's version id BEFORE the deploy, so stage 12 can roll back to exactly it,
     # even when a crash leaves the redirect deployed without SWITCHED_AT written.
     show "wrangler deployments list --json   (the version the old address serves now)"
-    OLD_APP_VERSION=$("$WR" deployments list --json --config "$OUT/redirect.jsonc" | node -e '
+    OLD_APP_VERSION=$(as_old "$WR" deployments list --json --config "$OUT/redirect.jsonc" | node -e '
       const d = JSON.parse(require("fs").readFileSync(0, "utf8")).sort((a, b) => a.created_on.localeCompare(b.created_on));
       const v = d.length && d[d.length - 1].versions.find((x) => x.percentage === 100);
       if (v) console.log(v.version_id)') || OLD_APP_VERSION=""
@@ -568,7 +605,7 @@ else
   fi
   say "The app's version, kept for the undo: $OLD_APP_VERSION"
   must "The redirect didn't deploy, and the old site still runs. Re-run: bash $0 evening 9" \
-    "$WR" deploy --config "$OUT/redirect.jsonc"
+    as_old "$WR" deploy --config "$OUT/redirect.jsonc"
   write_env SWITCHED_AT "$(date +%s)"
 fi
 show "curl -sI $OLD_ORIGIN/id/$NFC_SLUG"
@@ -626,7 +663,7 @@ else
     exit 1
   fi
   must "The rollback failed. Try: npx wrangler rollback $OLD_APP_VERSION --config $OUT/redirect.jsonc" \
-    "$WR" rollback "$OLD_APP_VERSION" --config "$OUT/redirect.jsonc" -m "Undo the move to the shared account"
+    as_old "$WR" rollback "$OLD_APP_VERSION" --config "$OUT/redirect.jsonc" -m "Undo the move to the shared account"
   write_env SWITCHED_AT ""
   write_env OLD_APP_VERSION ""
   say "✓ The old address serves the old site again."
@@ -643,8 +680,7 @@ evening() {
 local from="$1" i
 [[ "$from" =~ ^([1-9]|1[0-2])$ ]] || { warn "The stage to resume from is 1 to 12."; exit 2; }
 TOTAL_STAGES=12
-# Every command here names its account through a config's account_id; an inherited variable must not redirect one.
-unset CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID
+clean_cloudflare_env
 banner "CSA-ID move · Part 2 of 3: the evening"
 evening_1 # always: it loads tonight's values and checks where commands go
 for ((i = from > 2 ? from : 2; i <= 12; i++)); do
@@ -657,7 +693,7 @@ done
 
 cleanup() {
 TOTAL_STAGES=3
-unset CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID # as in evening: the configs name the account
+clean_cloudflare_env
 banner "CSA-ID move · Part 3 of 3: clean up the old account"
 load OLD_ACCOUNT_ID KEPT_AT NEW_SUBDOMAIN
 
@@ -674,14 +710,15 @@ if ((days < 7)); then
 fi
 confirm "Has the new site worked all week, with nobody asking to undo?" || exit 1
 write_old_config
+preflight_logins old
 
 stage "Delete the old database and image namespace"
 say "This deletes the Peer Advisers' data from ymsrubio's personal account, for good. The shared"
 say "account's copy becomes the only one. It can't be undone."
 ask CONFIRM_DELETE "Type delete to confirm:" || exit 1
 [[ "$CONFIRM_DELETE" == delete ]] || { warn "Nothing deleted."; exit 1; }
-must "Deleting the old database failed." "$WR" d1 delete csa-id --config "$OLD_CFG"
-must "Deleting the old namespace failed." "$WR" kv namespace delete --namespace-id "$OLD_KV_ID" --config "$OLD_CFG"
+must "Deleting the old database failed." as_old "$WR" d1 delete csa-id --config "$OLD_CFG"
+must "Deleting the old namespace failed." as_old "$WR" kv namespace delete --namespace-id "$OLD_KV_ID" --config "$OLD_CFG"
 
 stage "What's left"
 rm -rf "$OUT"

@@ -8,10 +8,36 @@
 #   OUT      where exports go. On the evening they hold Peer Advisers' personal data: delete them after.
 #   HERE     this folder
 
-old_d1() { "$WR" d1 "$@" "$WHERE" --config "$OLD_CFG"; }
-new_d1() { "$WR" d1 "$@" "$WHERE" --config "$NEW_CFG"; }
-old_kv() { "$WR" kv "$@" "$WHERE" --config "$OLD_CFG" --binding KV; }
-new_kv() { "$WR" kv "$@" "$WHERE" --config "$NEW_CFG" --binding KV; }
+# The old and the shared account may be reached by two different Cloudflare logins. Wrangler picks a login
+# per process from CLOUDFLARE_AUTH_PROFILE ("default" is the plain `wrangler login`), and child processes
+# such as `npm run deploy` inherit it, which a --profile flag could not do. So every remote command runs
+# through as_old or as_new. The rehearsal (--local) never sets them: "default" is harmless there.
+#   OLD_PROFILE / NEW_PROFILE  the login for each account; move.sh finds them in its preflight (find_logins).
+as_old() { CLOUDFLARE_AUTH_PROFILE="${OLD_PROFILE:-default}" "$@"; }
+as_new() { CLOUDFLARE_AUTH_PROFILE="${NEW_PROFILE:-default}" "$@"; }
+
+old_d1() { as_old "$WR" d1 "$@" "$WHERE" --config "$OLD_CFG"; }
+new_d1() { as_new "$WR" d1 "$@" "$WHERE" --config "$NEW_CFG"; }
+old_kv() { as_old "$WR" kv "$@" "$WHERE" --config "$OLD_CFG" --binding KV; }
+new_kv() { as_new "$WR" kv "$@" "$WHERE" --config "$NEW_CFG" --binding KV; }
+
+# login_reaches PROFILE ACCOUNT_ID: read only. Does that login's account list hold the account?
+login_reaches() {
+  CLOUDFLARE_AUTH_PROFILE="$1" "$WR" whoami --json 2>/dev/null | node -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      try { process.exit(JSON.parse(s).accounts.some(a => a.id === process.argv[1]) ? 0 : 1); } catch { process.exit(1); }
+    })' "$2"
+}
+
+# find_login VAR ACCOUNT_ID NAMED_PROFILE: set VAR to the first login that reaches the account: the named
+# profile (wrangler auth create NAMED_PROFILE), else the default one. Fails when neither does.
+find_login() {
+  local var="$1" account="$2" p
+  for p in "$3" default; do
+    if login_reaches "$p" "$account"; then printf -v "$var" '%s' "$p"; return 0; fi
+  done
+  return 1
+}
 
 # Written for bash 3.2 too (macOS): no mapfile, no tac.
 

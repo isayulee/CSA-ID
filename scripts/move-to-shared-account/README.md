@@ -22,13 +22,26 @@ bash scripts/move-to-shared-account/move.sh evening       # or "evening 5" to re
 bash scripts/move-to-shared-account/move.sh cleanup
 ```
 
-Both parts ignore an inherited `CLOUDFLARE_ACCOUNT_ID`: every command names its account through a config file.
+## Signing in to both accounts
+
+`evening` and `cleanup` reach two accounts, and they may need two different Cloudflare logins. Each command names its account in a config (`account_id`) and its login through a wrangler auth profile: `CLOUDFLARE_AUTH_PROFILE`, which `npm run deploy` and the OpenNext deploy pass on to wrangler, as a `--profile` flag could not. Before anything is exported or changed, stage 1 (and `cleanup`) asks each login, read only, whether it reaches its own account, and stops with the exact command when it doesn't.
+
+Sign in once per account, with the browser (OAuth). The tokens stay in wrangler's own storage; the scripts never see them:
+
+```bash
+npx wrangler auth create csa-old      # sign in as the login that owns ymsrubio's personal account
+npx wrangler auth create csa-shared   # sign in as the login that belongs to the shared isayulee account
+```
+
+A login that already sees both accounts is enough: the scripts fall back to the plain `wrangler login` when a named profile is missing, so `npx wrangler login` once works too. The named profiles leave that default login alone. Run `npx wrangler auth list` to see what exists (`auth` profiles are marked experimental in wrangler 4.159).
+
+The scripts also unset `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_EMAIL` and `CLOUDFLARE_AUTH_PROFILE` from your shell first, since an API token would override every login. `prepare` is unchanged: it uses the plain login and the account you give it.
 
 It needs Git, bash (Git Bash on Windows), curl, and Node with `npm install` done. On Windows, keep the checkout path short (see [What the rehearsal found](#what-the-rehearsal-found)). Agents never run these: every part uses `--remote`.
 
 ## The evening
 
-1. **Before you start:** checks for a clean, up-to-date `main` whose `wrangler.jsonc` points at the shared account, asks for the old account's ID, and confirms that Workers Builds is disconnected, Google has the new address and the Peer Advisers were told.
+1. **Before you start:** checks for a clean, up-to-date `main` whose `wrangler.jsonc` points at the shared account, asks for the old account's ID, proves that each account's login reaches it (see [Signing in to both accounts](#signing-in-to-both-accounts)), and confirms that Workers Builds is disconnected, Google has the new address and the Peer Advisers were told.
 2. **Count** every table in the old database (read only), and record its migrations.
 3. **Export the database:** the structure, then every row except Sessions, as one import file.
 4. **Export the images:** every `img/` key, with its content type.
@@ -46,7 +59,7 @@ It needs Git, bash (Git Bash on Windows), curl, and Node with `npm install` done
 #98 and #99 undid #80's rollback, so `main` already holds release #48's work, with migrations `0000` to `0004`, and `main` and `dev` agree apart from this pull request. What's still needed is this pull request, which points `wrangler.jsonc` and the README at the shared account:
 
 1. Merge this pull request into `dev`.
-2. Release `dev` into `main` with a merge commit. Only the owner opens and merges it, and merging it deploys to the live site. Don't deploy or migrate by hand before the evening: from here on both go to the shared account, where the app would be live on an empty database.
+2. Release `dev` into `main` with a merge commit. Only the owner opens and merges it. Merging deploys nothing yet: Workers Builds is disconnected from the old account's Worker (a step before the evening), and the shared account's isn't connected until stage 11. Don't deploy or migrate by hand before the evening: from the merge on, both go to the shared account, where the app would be live on an empty database.
 
 The evening deploys whatever `main` holds. The old database is at migration `0002`, so stage 5 applies `0003` and `0004` to the new database right after the import, and stage 8 checks the new site before anyone is sent to it.
 
