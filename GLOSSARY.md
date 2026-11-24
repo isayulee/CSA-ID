@@ -74,6 +74,22 @@ _Avoid_: Pending kit, kit revision, suggestion
 A Mapúa course on the shared list, identified by its course code (for example MATH146), that Teaching Kits, Peer Advisers and Advising Requests refer to.
 _Avoid_: Subject, class
 
+**Campus**:
+One of Mapúa University's sites, for example Intramuros or Makati, where a Peer Adviser tutors and an Advisee asks to meet.
+_Avoid_: Branch, site, location
+
+**Academic Term**:
+One numbered term of a Mapúa academic year, for example Term 1 of AY 2026–2027.
+_Avoid_: Semester, quarter, trimester
+
+**Availability**:
+The hours of the week a Peer Adviser can tutor, kept as 1-hour slots from Monday to Saturday, 8:00 to 17:00.
+_Avoid_: Schedule, calendar, free time
+
+**Advisee**:
+A Mapúa student who asks the CSA for a tutoring session through the intake Google Form; an Advisee never signs in.
+_Avoid_: Tutee, client, student
+
 **Advising Request**:
 One advisee's submission of the CSA intake Google Form asking for a tutoring session.
 _Avoid_: Booking, consultation, appointment, session request
@@ -90,4 +106,6 @@ _Avoid_: Auto-assign, pairing algorithm
 
 - A **Peer Adviser** is a **User** and owns one **Profile**
 - An **Officer** is a **Peer Adviser**; an **Administrator** is a separate trust grant, not a position
-- A **Teaching Kit** belongs to one course and one academic term
+- A **Teaching Kit** belongs to one **Course** and one **Academic Term**
+- A **Peer Adviser** tutors on one **Campus** and keeps one **Availability**
+- An **Advising Request** comes from one **Advisee** and names one **Campus**
