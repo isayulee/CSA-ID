@@ -22,13 +22,13 @@ UNION
 SELECT slug, created_at FROM old_profiles
 WHERE slug IS NOT NULL AND slug NOT IN (SELECT slug FROM old_reserved_slugs);
 
--- profiles (#85): role -> role_title (the old "Student assistant" default becomes "Peer Adviser"),
+-- profiles (#85): role -> role_title, unchanged (Student Assistant is a real role next to Peer Adviser, #92),
 -- appearance JSON -> four columns, http:// evaluation links upgraded to https://, empty student number -> null.
 INSERT INTO profiles (id, user_id, slug, status, display_name, role_title, bio, accent_color,
   icon_color, card_color, card_opacity, card_frosted, avatar_key, background_key,
   evaluation_url, student_number, show_student_number, terms_version, terms_accepted_at, created_at, updated_at)
 SELECT id, user_id, slug, status, substr(display_name, 1, 128),
-  CASE WHEN role = 'Student assistant' THEN 'Peer Adviser' ELSE substr(role, 1, 128) END,
+  substr(role, 1, 128),
   substr(bio, 1, 500), upper(accent_color),
   json_extract(appearance, '$.iconColor'), json_extract(appearance, '$.cardColor'),
   json_extract(appearance, '$.cardOpacity'),
@@ -46,7 +46,7 @@ INSERT INTO published_profiles (profile_id, slug, display_name, role_title, bio,
   icon_color, card_color, card_opacity, card_frosted, avatar_key, background_key,
   evaluation_url, student_number, show_student_number, published_at)
 SELECT profile_id, slug, display_name,
-  CASE WHEN role = 'Student assistant' THEN 'Peer Adviser' ELSE role END,
+  role,
   bio, upper(accent_color),
   json_extract(appearance, '$.iconColor'), json_extract(appearance, '$.cardColor'),
   json_extract(appearance, '$.cardOpacity'),

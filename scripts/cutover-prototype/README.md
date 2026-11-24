@@ -34,7 +34,7 @@ Everything is local. The throwaway database is `PROTOTYPE-wipe-me` in `scripts/c
 Transforms applied, as decided on the map:
 - **users (#86):** drop `picture_url`; replace a missing or "Student assistant" name with the email prefix; set `age_confirmed_at` to the sign-up time, because the sign-in page has said "you confirm you are at least 18" since the first commit.
 - **reserved_slugs (#86):** keep `slug`; `created_at` becomes `reserved_at`.
-- **profiles (#85):** `role` becomes `role_title` ("Student assistant" becomes "Peer Adviser"); appearance JSON becomes four columns; `http://` evaluation links become `https://`.
+- **profiles (#85):** `role` becomes `role_title` with its text unchanged (Student Assistant is a real role next to Peer Adviser, decided on #92); appearance JSON becomes four columns; `http://` evaluation links become `https://`.
 - **abuse_reports (#86):** `slug` is filled from the Profile.
 - **admin_audit_log (#87):** `target_type = 'profile'`.
 - **sessions:** not carried.
