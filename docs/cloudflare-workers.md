@@ -61,7 +61,7 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-Create the OAuth client in Google Cloud Console with the redirect URI `<origin>/login/google/callback`, for example `http://localhost:8787/login/google/callback` locally and `https://csa-id.yuanmiguelrubio.workers.dev/login/google/callback` deployed. For production, set the same names with `wrangler secret put`.
+Create the OAuth client in Google Cloud Console with the redirect URI `<origin>/login/google/callback`, for example `http://localhost:8787/login/google/callback` locally and `https://csa-id.csa-makati.workers.dev/login/google/callback` deployed. For production, set the same names with `wrangler secret put`.
 
 Change the schema, then generate and apply a migration:
 

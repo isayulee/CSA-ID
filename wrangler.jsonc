@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "csa-id",
+  // The shared team account (issue #95). Pinned so every wrangler command and deploy goes there, whoever is signed in.
+  "account_id": "82eb0e1a34cc54ba5d667cff5c406094",
   "main": "worker.ts",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -19,18 +21,18 @@
     {
       "binding": "DB",
       "database_name": "csa-id",
-      "database_id": "e10ae114-9102-4133-8305-b349f5497788"
+      "database_id": "83c690f7-9929-45eb-b7cd-a9a6ae056f9f"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "0ff2270b1f6e431fb53814834f29cd30"
+      "id": "b68eba71c3fc4c22a6c8cbf3574515d2"
     }
   ],
-  // Public Turnstile site key for csa-id.yuanmiguelrubio.workers.dev. Local dev overrides it in .dev.vars with a test key.
+  // Public Turnstile site key for csa-makati.workers.dev, which covers the live site and its previews. Local dev overrides it in .dev.vars with a test key.
   "vars": {
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAF-uRCV8f4yJxAnq"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGQyknxd7Oam0-E7"
   },
   "images": {
     "binding": "IMAGES"
@@ -43,20 +45,20 @@
       {
         "binding": "DB",
         "database_name": "csa-id",
-        "database_id": "e10ae114-9102-4133-8305-b349f5497788"
+        "database_id": "83c690f7-9929-45eb-b7cd-a9a6ae056f9f"
       }
     ],
     "kv_namespaces": [
       {
         "binding": "KV",
-        "id": "0ff2270b1f6e431fb53814834f29cd30"
+        "id": "b68eba71c3fc4c22a6c8cbf3574515d2"
       }
     ],
     "images": {
       "binding": "IMAGES"
     },
     "vars": {
-      "TURNSTILE_SITE_KEY": "0x4AAAAAAF-uRCV8f4yJxAnq"
+      "TURNSTILE_SITE_KEY": "0x4AAAAAAGQyknxd7Oam0-E7"
     }
   },
   "observability": {

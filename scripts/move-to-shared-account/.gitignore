@@ -1,0 +1,4 @@
+# Local state of the move. out/ holds Peer Advisers' personal data on the evening: never commit it.
+out/
+.move.env
+.rehearsal/
