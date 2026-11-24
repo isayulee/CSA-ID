@@ -420,7 +420,7 @@ if [[ "$OLD_ACCOUNT_ID" == "$NEW_ACCOUNT_ID" ]]; then
 fi
 write_env OLD_ACCOUNT_ID "$OLD_ACCOUNT_ID"
 write_old_config
-load NFC_SLUG SWITCHED_AT
+load NFC_SLUG SWITCHED_AT OLD_APP_VERSION
 open_url "https://dash.cloudflare.com/$OLD_ACCOUNT_ID/workers-and-pages"
 step "In the old account, open the csa-id Worker's Settings → Builds: no repository may be connected."
 confirm "Is Workers Builds disconnected from the old csa-id Worker?" ||
@@ -549,10 +549,28 @@ stage "Switch: the old address redirects to the new one"
 write_redirect_config
 say "Replaces the old account's csa-id Worker with a redirect: every request goes to the same path on"
 say "$(new_origin). The app version it replaces stays available for the undo in stage 12."
-confirm "Switch now?" || exit 1
-must "The redirect didn't deploy, and the old site still runs. Re-run: bash $0 evening 9" \
-  "$WR" deploy --config "$OUT/redirect.jsonc"
-write_env SWITCHED_AT "$(date +%s)"
+if [[ -n "$SWITCHED_AT" ]]; then
+  # Deploying the redirect again would bury the app's version one step deeper: only re-check.
+  note "The redirect is already deployed (switched at $(when "$SWITCHED_AT")), so it isn't deployed again."
+else
+  confirm "Switch now?" || exit 1
+  if [[ -z "$OLD_APP_VERSION" ]]; then
+    # Record the app's version id BEFORE the deploy, so stage 12 can roll back to exactly it,
+    # even when a crash leaves the redirect deployed without SWITCHED_AT written.
+    show "wrangler deployments list --json   (the version the old address serves now)"
+    OLD_APP_VERSION=$("$WR" deployments list --json --config "$OUT/redirect.jsonc" | node -e '
+      const d = JSON.parse(require("fs").readFileSync(0, "utf8")).sort((a, b) => a.created_on.localeCompare(b.created_on));
+      const v = d.length && d[d.length - 1].versions.find((x) => x.percentage === 100);
+      if (v) console.log(v.version_id)') || OLD_APP_VERSION=""
+    [[ "$OLD_APP_VERSION" =~ ^[0-9a-f-]{36}$ ]] ||
+      { warn "Couldn't read the old app's version id. Nothing changed. Re-run: bash $0 evening 9"; exit 1; }
+    write_env OLD_APP_VERSION "$OLD_APP_VERSION"
+  fi
+  say "The app's version, kept for the undo: $OLD_APP_VERSION"
+  must "The redirect didn't deploy, and the old site still runs. Re-run: bash $0 evening 9" \
+    "$WR" deploy --config "$OUT/redirect.jsonc"
+  write_env SWITCHED_AT "$(date +%s)"
+fi
 show "curl -sI $OLD_ORIGIN/id/$NFC_SLUG"
 if curl -sI "$OLD_ORIGIN/id/$NFC_SLUG" | tr -d '\r' | grep -q -i -x "location: $(new_origin)/id/$NFC_SLUG"; then
   say "✓ $OLD_ORIGIN/id/$NFC_SLUG now redirects to the new address."
@@ -602,9 +620,15 @@ if confirm "Keep the move?"; then
   say "✓ Kept. In 7 days, delete the old database and namespace: bash $0 cleanup"
 else
   confirm "Undo: roll the old csa-id Worker back to the app, on its untouched database?" || exit 1
-  must "The rollback failed. Try: npx wrangler rollback --config $OUT/redirect.jsonc" \
-    "$WR" rollback --config "$OUT/redirect.jsonc" -m "Undo the move to the shared account"
+  if [[ -z "$OLD_APP_VERSION" ]]; then
+    warn "No app version was recorded. Find it: npx wrangler deployments list --config $OUT/redirect.jsonc"
+    note "Then: npx wrangler rollback <the version before the redirect> --config $OUT/redirect.jsonc"
+    exit 1
+  fi
+  must "The rollback failed. Try: npx wrangler rollback $OLD_APP_VERSION --config $OUT/redirect.jsonc" \
+    "$WR" rollback "$OLD_APP_VERSION" --config "$OUT/redirect.jsonc" -m "Undo the move to the shared account"
   write_env SWITCHED_AT ""
+  write_env OLD_APP_VERSION ""
   say "✓ The old address serves the old site again."
   note "The shared account keeps tonight's copy, unused. To try again another evening: bash $0 evening"
   note "(stage 5 empties the shared database first)."
@@ -619,6 +643,8 @@ evening() {
 local from="$1" i
 [[ "$from" =~ ^([1-9]|1[0-2])$ ]] || { warn "The stage to resume from is 1 to 12."; exit 2; }
 TOTAL_STAGES=12
+# Every command here names its account through a config's account_id; an inherited variable must not redirect one.
+unset CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID
 banner "CSA-ID move · Part 2 of 3: the evening"
 evening_1 # always: it loads tonight's values and checks where commands go
 for ((i = from > 2 ? from : 2; i <= 12; i++)); do
@@ -631,6 +657,7 @@ done
 
 cleanup() {
 TOTAL_STAGES=3
+unset CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID # as in evening: the configs name the account
 banner "CSA-ID move · Part 3 of 3: clean up the old account"
 load OLD_ACCOUNT_ID KEPT_AT NEW_SUBDOMAIN
 

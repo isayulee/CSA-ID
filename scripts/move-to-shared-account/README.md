@@ -22,6 +22,8 @@ bash scripts/move-to-shared-account/move.sh evening       # or "evening 5" to re
 bash scripts/move-to-shared-account/move.sh cleanup
 ```
 
+Both parts ignore an inherited `CLOUDFLARE_ACCOUNT_ID`: every command names its account through a config file.
+
 It needs Git, bash (Git Bash on Windows), curl, and Node with `npm install` done. On Windows, keep the checkout path short (see [What the rehearsal found](#what-the-rehearsal-found)). Agents never run these: every part uses `--remote`.
 
 ## The evening
@@ -34,14 +36,19 @@ It needs Git, bash (Git Bash on Windows), curl, and Node with `npm install` done
 6. **Import the images**, then confirm the same keys, content types and bytes.
 7. **Deploy `main`** to the shared account, then set the four secrets from hidden prompts.
 8. **Check the new address:** the row counts match, the NFC Card's `/id/<slug>` opens, and Google sign-in lands on your own Profile. Nobody has been sent there yet.
-9. **Switch:** the old account's `csa-id` Worker becomes a 302 redirect to the same path on the new address.
+9. **Switch:** first records the app's version id, then turns the old account's `csa-id` Worker into a 302 redirect to the same path on the new address. Running it again never deploys the redirect twice.
 10. **Late writes:** compare the old database with the export, so any edit made after the export is caught.
 11. **Connect Workers Builds** in the shared account, so merges to `main` deploy again.
-12. **Keep or undo** within 30 minutes. Undo rolls the old Worker back to the app, on its untouched database. Either way, the exports (which hold personal data) are deleted.
+12. **Keep or undo** within 30 minutes. Undo rolls the old Worker back to the version recorded in stage 9, on its untouched database. Either way, the exports (which hold personal data) are deleted.
 
 ## The release that carries this to `main`
 
-`main` still holds #80's rollback of release #48, so it ships migrations `0000` to `0002` while `dev` has `0003` and `0004`. The evening deploys whatever `main` holds, and stage 5 applies `main`'s pending migrations to the new database right after the import. The recommended release therefore also undoes #80's rollback: `main` then gets `dev`'s held-back work, and the new database gets the migrations whose absence broke #48. The new site is checked in stage 8 before anyone is sent to it.
+#98 and #99 undid #80's rollback, so `main` already holds release #48's work, with migrations `0000` to `0004`, and `main` and `dev` agree apart from this pull request. What's still needed is this pull request, which points `wrangler.jsonc` and the README at the shared account:
+
+1. Merge this pull request into `dev`.
+2. Release `dev` into `main` with a merge commit. Only the owner opens and merges it, and merging it deploys to the live site. Don't deploy or migrate by hand before the evening: from here on both go to the shared account, where the app would be live on an empty database.
+
+The evening deploys whatever `main` holds. The old database is at migration `0002`, so stage 5 applies `0003` and `0004` to the new database right after the import, and stage 8 checks the new site before anyone is sent to it.
 
 ## If something goes wrong
 
