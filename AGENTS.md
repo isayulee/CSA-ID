@@ -10,12 +10,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # CSA Digital Profile: rules for coding agents
 
-This app gives each Mapúa CSA student assistant a Published Profile at `/id/<slug>`, opened from an NFC Card. The repository owner reviews every pull request and merges only work that follows this file. [CONTRIBUTING.md](CONTRIBUTING.md) holds the human procedures (setup, tickets, branches, pull requests); this file holds the rules.
+This app gives each Mapúa CSA Peer Adviser a Published Profile at `/id/<slug>`, opened from an NFC Card, and a private Portal for Teaching Kits and Advising Requests. The repository owner reviews every pull request and merges only work that follows this file. [CONTRIBUTING.md](CONTRIBUTING.md) holds the human procedures (setup, tickets, branches, pull requests); this file holds the rules.
 
 ## Before you write code
 
 - Read the ticket in full: `gh issue view <n> --repo ymsrubio/CSA-ID --comments`. Do only what its **Done when** asks; list anything else you notice as a follow-up in the pull request.
-- Use the domain terms in [GLOSSARY.md](GLOSSARY.md) (User, Profile, Slug, Draft Profile, Published Profile, Social Link, Abuse Report, NFC Card) in code, tests, commits and issues. Its _Avoid_ words stay out. When a concept you need is missing from the glossary, raise it in the issue instead of coining a new word.
+- Use the domain terms in [GLOSSARY.md](GLOSSARY.md) (User, Profile, Slug, Draft Profile, Published Profile, Social Link, Abuse Report, NFC Card, Peer Adviser, Portal, Teaching Kit, Kit Draft, Course, Advising Request, Matching) in code, tests, commits and issues. Its _Avoid_ words stay out. When a concept you need is missing from the glossary, raise it in the issue instead of coining a new word.
 - Read the sections of [agent_technical_readme.md](agent_technical_readme.md) that touch your area. It is the technical contract: architecture, data model, authorization, validation, uploads, routes. When your change contradicts it, say so in the pull request instead of silently diverging.
 - [PRODUCT.md](PRODUCT.md) explains who the users are and why the product exists.
 
@@ -81,7 +81,7 @@ For a change a user can see, also prove it in the running app, locally and on th
 Previews run on the same `csa-id` Worker as the live site and share its D1 database and KV namespace. Anything you do on a preview happens to real data.
 
 - Test on a preview only with your own test accounts and test Profiles.
-- Never file an Abuse Report, delete, unpublish or edit a real student assistant's Profile on a preview.
+- Never file an Abuse Report, delete, unpublish or edit a real Peer Adviser's Profile on a preview, and never touch real Advising Requests or Teaching Kits there.
 - Never run a destructive request (account deletion, bulk changes, load tests) against a preview.
 - Do heavy or destructive testing locally, where D1 and KV live in `.wrangler/`.
 
@@ -98,3 +98,11 @@ These belong to the maintainer. Change them only when the ticket asks for it:
 - `PRODUCT.md`, `GLOSSARY.md`, `agent_technical_readme.md`.
 - The maintainer's tooling folders: `.impeccable/`, `.taste-skill/`, `.codex/`, `.cursor/`, `.gemini/`.
 - `cloudflare-env.d.ts` is generated: after changing `wrangler.jsonc`, regenerate it with `npm run cf-typegen`.
+
+## Agent skills
+
+Skills that triage issues, write tickets or explore the domain read these files first:
+
+- [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md): issues are GitHub issues on `ymsrubio/CSA-ID`, managed with `gh`.
+- [docs/agents/triage-labels.md](docs/agents/triage-labels.md): the five triage labels plus `in-progress`.
+- [docs/agents/domain.md](docs/agents/domain.md): read `GLOSSARY.md`, `PRODUCT.md` and `agent_technical_readme.md`.
