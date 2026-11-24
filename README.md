@@ -2,7 +2,7 @@
 
 A virtual business card and private workspace for the Peer Advisers of the Mapúa University Center for Student Advising. Each Peer Adviser signs in with Google, fills in a Profile, and claims a permanent Slug. Their NFC Card opens the Published Profile at `/id/<slug>`, where an advisee sees who they are, their Social Links, and a link to the session evaluation form.
 
-Live site: <https://csa-id.yuanmiguelrubio.workers.dev>
+Live site: <https://csa-id.csa-makati.workers.dev>
 
 ## Stack
 
