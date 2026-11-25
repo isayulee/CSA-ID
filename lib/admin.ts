@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { z } from "zod";
 import * as schema from "@/lib/db/schema";
+import { removeImages } from "@/lib/images/profile-images";
 import * as lifecycle from "@/lib/profile-lifecycle";
 
 type Db = DrizzleD1Database<typeof schema>;
@@ -69,28 +70,15 @@ export async function listOpenReports(deps: AdminDeps, actor: Actor): Promise<Ad
   return { status: 200, body: { reports } };
 }
 
-/**
- * Removes a Profile's public images: deletes every image key the Profile or its
- * Published Profile snapshot points at from KV, then one D1 batch clears those
- * keys on both rows and writes the audit entry.
- *
- * KV goes first on purpose: if D1 then fails, the Profile still holds the keys,
- * so a retry finds and removes them. The other order could leave an abusive
- * image reachable at its /media URL with nothing in D1 pointing to it.
- */
+/** Removes a Profile's public images through the Profile image module, which explains the order. */
 export async function removeProfileImages(deps: AdminDeps, actor: Actor, raw: unknown): Promise<AdminResult> {
   if (!isAdministrator(actor, deps.adminSubs)) return fail(401, "Unauthorized");
   const parsed = adminActionInput.safeParse(raw);
   if (!parsed.success) return fail(400, "Give a reason of 1 to 1000 characters");
-  const { db } = deps;
-  const target = await loadTarget(db, parsed.data.profileId);
+  const target = await loadTarget(deps.db, parsed.data.profileId);
   if (!target) return fail(404, "Profile not found");
-  const [published] = await db.select({ avatarKey: schema.publishedProfiles.avatarKey, backgroundKey: schema.publishedProfiles.backgroundKey })
-    .from(schema.publishedProfiles).where(eq(schema.publishedProfiles.profileId, target.id)).limit(1);
-  const keys = new Set([target.avatarKey, target.backgroundKey, published?.avatarKey, published?.backgroundKey].filter((key): key is string => Boolean(key)));
-  if (keys.size === 0) return fail(409, "This Profile has no images to remove");
-  await Promise.all([...keys].map((key) => deps.kv.delete(key)));
-  await lifecycle.clearImageKeys(db, target, { actorGoogleSub: actor.googleSub, reason: parsed.data.reason });
+  const removed = await removeImages(deps, target, { actorGoogleSub: actor.googleSub, reason: parsed.data.reason });
+  if (!removed) return fail(409, "This Profile has no images to remove");
   return { status: 200, body: { ok: true, slug: target.slug } };
 }
 
