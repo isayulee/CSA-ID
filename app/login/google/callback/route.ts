@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     if (existing) await db.update(users).set({ email: claims.email, name, pictureUrl }).where(eq(users.id, userId));
     else await db.insert(users).values({ id: userId, googleSub: claims.sub, email: claims.email, name, pictureUrl, createdAt: now });
     const [profile] = await db.select().from(profiles).where(and(eq(profiles.userId, userId))).limit(1);
-    if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId, slug: null, displayName: name, role: "Student assistant", bio: "", accentColor: "#B5121B", avatarKey: null, backgroundKey: null, evaluationUrl: null, status: "draft", createdAt: now, updatedAt: now });
+    if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId, slug: null, displayName: name, role: "", bio: "", accentColor: "#B5121B", avatarKey: null, backgroundKey: null, evaluationUrl: null, status: "draft", createdAt: now, updatedAt: now });
 
     const token = await createSession(db, userId);
     const response = NextResponse.redirect(new URL("/dashboard", request.url));

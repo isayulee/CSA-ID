@@ -1,4 +1,4 @@
-import { profileAppearanceStyle, type ProfileAppearance } from "@/lib/profile-appearance";
+import { profileAccentStyle, profileAppearanceStyle, type ProfileAppearance } from "@/lib/profile-appearance";
 import { SocialIcon, type SocialPlatform } from "./social-icon";
 
 type ProfileCardProps = {
@@ -17,8 +17,8 @@ type ProfileCardProps = {
 export function ProfileCard({
   compact = false,
   name = "Alex Santos",
-  role = "Student assistant",
-  bio = "Peer adviser for tutoring sessions at the Center for Student Advising.",
+  role = "Peer Adviser",
+  bio = "Peer Adviser for tutoring sessions at the Center for Student Advising.",
   studentNumber,
   primary = "#b5121b",
   avatarUrl,
@@ -27,7 +27,7 @@ export function ProfileCard({
   socialLinks,
 }: ProfileCardProps) {
   return (
-    <article className={`profileCard ${compact ? "profileCardCompact" : ""}`} style={{ ...profileAppearanceStyle(appearance), "--profile-accent": primary, "--preview-background": coverUrl ? `url(${coverUrl})` : undefined } as React.CSSProperties}>
+    <article className={`profileCard ${compact ? "profileCardCompact" : ""}`} style={{ ...profileAppearanceStyle(appearance), ...profileAccentStyle(primary), "--preview-background": coverUrl ? `url(${coverUrl})` : undefined } as React.CSSProperties}>
       <div className="profileCover" aria-hidden="true" style={coverUrl ? { backgroundImage: `url(${coverUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>{!coverUrl && <><span /><span /><span /></>}</div>
       <div className="profileBody">
         <div className="avatar" aria-label={`${name} profile image`} style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>{avatarUrl ? "" : name.split(" ").map((part) => part[0]).join("")}</div>

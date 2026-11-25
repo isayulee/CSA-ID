@@ -30,7 +30,7 @@ export function EvaluationPrefill({ adviserName, studentNumber }: { adviserName:
       <input type="hidden" name="entry.867817569" value={adviserName} />
       {studentNumber && <input type="hidden" name="entry.2119958442" value={studentNumber} />}
       <button className="evaluationButton" type="submit">
-        Open session evaluation <SocialIcon className="buttonExternalIcon" platform="external" />
+        Open session evaluation <span className="srOnly"> (opens in a new tab)</span><SocialIcon className="buttonExternalIcon" platform="external" />
       </button>
     </form>
   );

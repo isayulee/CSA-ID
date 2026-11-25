@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   async headers() {
     const noStore = [{ key: "Cache-Control", value: "private, no-store" }];
     return [
+      { source: "/portal/:path*", headers: noStore },
+      { source: "/admin/:path*", headers: noStore },
       { source: "/dashboard/:path*", headers: noStore },
       { source: "/api/:path*", headers: noStore },
       { source: "/id/:slug", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
