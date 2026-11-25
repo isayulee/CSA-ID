@@ -23,24 +23,46 @@ fail() { printf '  FAIL  %s\n' "$1"; failures=$((failures + 1)); }
 check() { local what="$1"; shift; if "$@"; then pass "$what"; else fail "$what"; fi; }
 equals() { [[ "$1" == "$2" ]]; }
 schema_objects() { d1_rows "$1" "SELECT type, name FROM sqlite_master WHERE substr(name, 1, 16) <> 'sqlite_autoindex' AND substr(name, 1, 4) <> '_cf_' ORDER BY type, name"; }
-same_schema_objects() { diff <(schema_objects old) <(schema_objects new) >/dev/null; }
+# One after the other: both databases share a local state folder, and two wranglers at once can find it locked.
+same_schema_objects() {
+  local old new
+  old=$(schema_objects old) && new=$(schema_objects new) && [[ -n "$old" && "$old" == "$new" ]]
+}
 slug_is_locked() { ! new_d1 execute csa-id --command "UPDATE profiles SET slug = 'stolen' WHERE id = 'p1'" >/dev/null 2>&1; }
+# The triggers only fire on a row, so an empty log gets one first.
 audit_log_is_append_only() {
-  new_d1 execute csa-id --command "INSERT INTO admin_audit_log (id, actor_google_sub, action, target_profile_id, reason) VALUES ('a1', '1', 'suspend', 'p4', 'rehearsal')" >/dev/null &&
-    ! new_d1 execute csa-id --command "DELETE FROM admin_audit_log" >/dev/null 2>&1
+  if [[ "$(d1_rows new 'SELECT count(*) FROM admin_audit_log')" == 0 ]]; then
+    new_d1 execute csa-id --command "INSERT INTO admin_audit_log (id, actor_google_sub, action, target_profile_id, reason) VALUES ('a1', '1', 'suspend', 'p4', 'rehearsal')" >/dev/null || return 1
+  fi
+  ! new_d1 execute csa-id --command "DELETE FROM admin_audit_log" >/dev/null 2>&1 &&
+    ! new_d1 execute csa-id --command "UPDATE admin_audit_log SET reason = 'x'" >/dev/null 2>&1
+}
+# Every insert must hold on its own, as if D1 ignored the pragma. Local D1 enforces foreign keys.
+without_defer() { grep -v '^PRAGMA defer_foreign_keys=TRUE;$' "$1"; }
+import_without_defer() { new_d1 execute csa-id --file "$1" -y > "$R/import.log" 2>&1; }
+export_order_is_rejected() {
+  { cat "$OUT/schema.sql"; printf '\n'; cat "$OUT/data.sql"; } > "$R/export-order.sql"
+  without_defer "$R/export-order.sql" > "$R/export-order-strict.sql"
+  ! import_without_defer "$R/export-order-strict.sql" && grep -q 'FOREIGN KEY constraint failed' "$R/import.log"
 }
 
-section "Setup: two throwaway local 'accounts'"
+# rehearse LEVEL: the whole evening with the old database at that migration.
+rehearse() {
+LEVEL="$1"
+section "Old database at $LEVEL. Setup: two throwaway local 'accounts'"
 rm -rf "$R"
-mkdir -p "$R/migrations-main" "$R/images" "$OUT"
-# The old database sits at 0002, like main. The new one applies the repo's migrations on top.
-cp "$REPO"/migrations/0000_*.sql "$REPO"/migrations/0001_*.sql "$REPO"/migrations/0002_*.sql "$R/migrations-main/"
+mkdir -p "$R/migrations-old" "$R/images" "$OUT"
+# The new database applies the repo's migrations on top of the old one's.
+local m
+for m in "$REPO"/migrations/*.sql; do
+  [[ "$(basename "$m")" > "${LEVEL}_~" ]] || cp "$m" "$R/migrations-old/"
+done
 cat > "$OLD_CFG" <<'EOF'
 // Rehearsal only, never --remote: stands in for ymsrubio's account.
 {
   "name": "rehearsal-old",
   "compatibility_date": "2026-11-01",
-  "d1_databases": [{ "binding": "DB", "database_name": "csa-id", "database_id": "00000000-0000-4000-8000-0000000001d0", "migrations_dir": "migrations-main" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "csa-id", "database_id": "00000000-0000-4000-8000-0000000001d0", "migrations_dir": "migrations-old" }],
   "kv_namespaces": [{ "binding": "KV", "id": "000000000000000000000000000001d0" }]
 }
 EOF
@@ -55,6 +77,7 @@ cat > "$NEW_CFG" <<'EOF'
 EOF
 old_d1 migrations apply csa-id >/dev/null
 old_d1 execute csa-id --file "$HERE/rehearsal/seed-0002.sql" >/dev/null
+if [[ "$LEVEL" == 0004 ]]; then old_d1 execute csa-id --file "$HERE/rehearsal/seed-0004.sql" >/dev/null; fi
 # Fake WebP files holding the bytes that break text handling: NUL, LF, CR, 0xFF and 0x1A.
 node -e '
   const fs = require("fs");
@@ -77,12 +100,24 @@ sed 's/^/  /' "$OUT/counts-old.txt"
 section "Stage 3: export the old database"
 export_db >/dev/null
 check "the data export leaves Session rows behind" equals "$(grep -c '^INSERT INTO "sessions"' "$OUT/data.sql" || true)" 0
-check "the structure export keeps both triggers" equals "$(grep -c '^CREATE TRIGGER' "$OUT/schema.sql")" 2
-check "the structure export keeps all 10 named indexes" equals "$(grep -c -E '^CREATE (UNIQUE )?INDEX' "$OUT/schema.sql")" 10
+local triggers=2 indexes=10
+if [[ "$LEVEL" == 0004 ]]; then triggers=4 indexes=11; fi
+check "the structure export keeps all $triggers triggers" equals "$(grep -c '^CREATE TRIGGER' "$OUT/schema.sql")" "$triggers"
+check "the structure export keeps all $indexes named indexes" equals "$(grep -c -E '^CREATE (UNIQUE )?INDEX' "$OUT/schema.sql")" "$indexes"
+check "the import file leaves Session rows behind" equals "$(grep -c '^INSERT INTO "sessions"' "$OUT/import.sql" || true)" 0
 
 section "Stage 4: export the images"
 export_kv >/dev/null
 check "3 img/ keys exported; the rate-limit key stays behind" equals "$(kv_count)" 3
+
+section "Import order: foreign keys enforced, defer pragmas stripped"
+check "the order as exported is rejected, like on the evening" export_order_is_rejected
+empty_new_db
+without_defer "$OUT/import.sql" > "$R/import-strict.sql"
+check "no defer pragma is left in the stripped file" equals "$(grep -c '^PRAGMA' "$R/import-strict.sql" || true)" 0
+check "import.sql's order is accepted" import_without_defer "$R/import-strict.sql"
+check "and it holds exactly the exported rows, byte for byte" same_data_as_export new
+empty_new_db
 
 section "Stage 5: import into the shared database, then its pending migrations"
 import_db >/dev/null
@@ -90,7 +125,7 @@ check "it holds exactly the exported rows, byte for byte" same_data_as_export ne
 check "same tables, indexes and triggers as the old database" same_schema_objects
 check "no Session rows moved" equals "$(d1_rows new 'SELECT count(*) FROM sessions')" 0
 migrate_new >/dev/null
-check "main's pending migrations applied on top (0003, 0004)" equals "$(migration_level new | tr '\n' ' ')" \
+check "the new database ends at 0004, with any pending migrations applied on top" equals "$(migration_level new | tr '\n' ' ')" \
   "0000_init_users_sessions.sql 0001_initial.sql 0002_reserved_slugs_survive_deletion.sql 0003_admin_audit_log.sql 0004_profile_evaluation_appearance.sql "
 check "a Slug still can't change" slug_is_locked
 check "the audit log from 0003 is append-only" audit_log_is_append_only
@@ -114,6 +149,73 @@ empty_new_db
 check "the shared database is empty" equals "$(app_tables new)" ""
 import_db >/dev/null
 check "the second import matches the export too" same_data_as_export new
+
+}
+
+failure_checks() {
+section "Failures: every step that can't finish says so, called the way move.sh's must calls it"
+# The fake Wrangler passes calls on, except that one holding FAIL_ON writes part of its output and fails.
+REAL_WR="$WR"
+export REAL_WR FAIL_ON=""
+cat > "$R/fake-wrangler" <<'EOF'
+#!/usr/bin/env bash
+if [[ -n "$FAIL_ON" && " $* " == *"$FAIL_ON"* ]]; then
+  out=""
+  for a in "$@"; do
+    if [[ "$out" == next ]]; then out="$a"; break; fi
+    if [[ "$a" == --output ]]; then out=next; fi
+  done
+  if [[ -n "$out" ]]; then printf 'PRAGMA defer_foreign_keys=TRUE;\n' > "$out"; else printf '[]'; fi
+  exit 1
+fi
+exec "$REAL_WR" "$@"
+EOF
+chmod +x "$R/fake-wrangler"
+WR="$R/fake-wrangler"
+fails() { FAIL_ON="$1"; shift; local rc=0; if "$@" >/dev/null 2>&1; then rc=1; fi; FAIL_ON=""; return "$rc"; }
+works() { if "$@" >/dev/null 2>&1; then return 0; else return 1; fi; }
+leaves_none() { [[ ! -e "$1" ]]; }
+
+check "export_db works when nothing fails" works export_db
+check "export_kv works when nothing fails" works export_kv
+check "verify_kv works when nothing fails" works verify_kv
+check "counts: the table list fails" fails "execute" counts old
+check "import_db fails" fails "--file" import_db
+check "same_data_as_export: the fresh export fails" fails "--no-schema" same_data_as_export old
+local rc=0
+cp "$OUT/data.sql" "$OUT/data-old-now.sql"
+FAIL_ON="--no-schema"; same_data_as_export old >/dev/null 2>&1 || rc=$?; FAIL_ON=""
+check "  with 2, so it isn't mistaken for a difference, even next to an older copy" equals "$rc" 2
+check "  and changed_tables doesn't report that nothing changed" fails "" changed_tables old
+mv "$OUT/data-tables.txt" "$R/kept.txt"
+check "same_data_as_export: without the table list it fails" fails "" same_data_as_export old
+mv "$R/kept.txt" "$OUT/data-tables.txt"
+check "empty_new_db: the table list fails" fails "execute" empty_new_db
+check "migrate_new fails" fails "migrations apply" migrate_new
+check "import_kv fails" fails "bulk put" import_kv
+check "verify_kv: the key list fails" fails "key list" verify_kv
+check "verify_kv: one image download fails" fails "key get img/p1/background" verify_kv
+printf 'x' >> "$OUT/kv/0001.bin"
+check "verify_kv: a byte differs" fails "" verify_kv
+check "export_db: the table list fails" fails "execute" export_db
+check "  and no older import.sql is left to import" leaves_none "$OUT/import.sql"
+check "export_db: the structure export fails" fails "--no-data" export_db
+check "  and there is no import.sql" leaves_none "$OUT/import.sql"
+check "export_db: the data export fails" fails "--no-schema" export_db
+check "  and there is no import.sql" leaves_none "$OUT/import.sql"
+check "export_kv: the key list fails" fails "key list" export_kv
+check "  and no older bulk.json is left to import" leaves_none "$OUT/kv/bulk.json"
+check "  so import_kv refuses instead of importing nothing" fails "" import_kv
+check "export_kv: one image download fails" fails "key get img/p1/background" export_kv
+check "  and there is no bulk.json" leaves_none "$OUT/kv/bulk.json"
+WR="$REAL_WR"
+}
+
+section "The import file"
+check "import file checks" node --disable-warning=ExperimentalWarning "$HERE/rehearsal/import-file-test.mjs"
+rehearse 0002
+rehearse 0004
+failure_checks
 
 section "The redirect Worker"
 check "redirect Worker checks" node "$HERE/redirect-worker/test.mjs"

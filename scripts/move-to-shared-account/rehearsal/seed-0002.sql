@@ -1,4 +1,4 @@
--- Fake data shaped like the live database at migration 0002 (what `main` ships), for rehearse.sh only.
+-- Fake data for the database at migration 0002, for rehearse.sh only. seed-0004.sql adds what 0004, live's level, has.
 -- Six Peer Advisers; p1's Slug is on an NFC Card. Text includes newlines, apostrophes, accents and emoji
 -- so the export and import are checked byte for byte.
 
@@ -53,4 +53,6 @@ INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES
 -- r2's Profile was deleted before the move, so its profile_id is already null.
 INSERT INTO abuse_reports (id, profile_id, reason, details, status, created_at) VALUES
   ('r1', 'p4', 'malicious-link', 'The evaluation link goes somewhere odd.', 'resolved', 1762300000),
-  ('r2', NULL, 'impersonation', '', 'open', 1762300100);
+  ('r2', NULL, 'impersonation', '', 'open', 1762300100),
+  ('r3', 'p2', 'prohibited-content', 'It''s "quoted"; `ticked`' || char(13) || char(10) ||
+     'PRAGMA defer_foreign_keys=TRUE;' || char(10) || 'INSERT INTO "users" VALUES(''x''); -- /* ; DROP TABLE users; \n', 'open', 1762300200);
