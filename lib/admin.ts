@@ -1,9 +1,10 @@
 import "server-only";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { z } from "zod";
 import * as schema from "@/lib/db/schema";
-import { snapshotDeleteStatements } from "@/lib/public/published-profile";
+import { removeImages } from "@/lib/images/profile-images";
+import * as lifecycle from "@/lib/profile-lifecycle";
 
 type Db = DrizzleD1Database<typeof schema>;
 
@@ -38,10 +39,6 @@ async function loadTarget(db: Db, profileId: string) {
   return profile ?? null;
 }
 
-function auditEntry(db: Db, actor: Actor, action: schema.AdminAuditAction, target: { id: string; slug: string | null }, reason: string) {
-  return db.insert(schema.adminAuditLog).values({ id: crypto.randomUUID(), actorGoogleSub: actor.googleSub, action, targetProfileId: target.id, targetSlug: target.slug, reason });
-}
-
 export type OpenReport = {
   id: string;
   reason: string;
@@ -73,39 +70,21 @@ export async function listOpenReports(deps: AdminDeps, actor: Actor): Promise<Ad
   return { status: 200, body: { reports } };
 }
 
-/**
- * Removes a Profile's public images: deletes every image key the Profile or its
- * Published Profile snapshot points at from KV, then one D1 batch clears those
- * keys on both rows and writes the audit entry.
- *
- * KV goes first on purpose: if D1 then fails, the Profile still holds the keys,
- * so a retry finds and removes them. The other order could leave an abusive
- * image reachable at its /media URL with nothing in D1 pointing to it.
- */
+/** Removes a Profile's public images through the Profile image module, which explains the order. */
 export async function removeProfileImages(deps: AdminDeps, actor: Actor, raw: unknown): Promise<AdminResult> {
   if (!isAdministrator(actor, deps.adminSubs)) return fail(401, "Unauthorized");
   const parsed = adminActionInput.safeParse(raw);
   if (!parsed.success) return fail(400, "Give a reason of 1 to 1000 characters");
-  const { db } = deps;
-  const target = await loadTarget(db, parsed.data.profileId);
+  const target = await loadTarget(deps.db, parsed.data.profileId);
   if (!target) return fail(404, "Profile not found");
-  const [published] = await db.select({ avatarKey: schema.publishedProfiles.avatarKey, backgroundKey: schema.publishedProfiles.backgroundKey })
-    .from(schema.publishedProfiles).where(eq(schema.publishedProfiles.profileId, target.id)).limit(1);
-  const keys = new Set([target.avatarKey, target.backgroundKey, published?.avatarKey, published?.backgroundKey].filter((key): key is string => Boolean(key)));
-  if (keys.size === 0) return fail(409, "This Profile has no images to remove");
-  await Promise.all([...keys].map((key) => deps.kv.delete(key)));
-  await db.batch([
-    db.update(schema.profiles).set({ avatarKey: null, backgroundKey: null }).where(eq(schema.profiles.id, target.id)),
-    db.update(schema.publishedProfiles).set({ avatarKey: null, backgroundKey: null }).where(eq(schema.publishedProfiles.profileId, target.id)),
-    auditEntry(db, actor, "remove_images", target, parsed.data.reason),
-  ]);
+  const removed = await removeImages(deps, target, { actorGoogleSub: actor.googleSub, reason: parsed.data.reason });
+  if (!removed) return fail(409, "This Profile has no images to remove");
   return { status: 200, body: { ok: true, slug: target.slug } };
 }
 
 /**
- * Suspends a Profile: one D1 batch removes the Published Profile snapshot, sets
- * the status to `suspended` and writes the audit entry. Ownership and the
- * reserved Slug stay. The caller purges the edge-cached page for the returned Slug.
+ * Suspends a Profile through the Profile lifecycle module. The caller purges the
+ * edge-cached page for the returned Slug.
  */
 export async function suspendProfile(deps: AdminDeps, actor: Actor, raw: unknown): Promise<AdminResult> {
   if (!isAdministrator(actor, deps.adminSubs)) return fail(401, "Unauthorized");
@@ -115,23 +94,7 @@ export async function suspendProfile(deps: AdminDeps, actor: Actor, raw: unknown
   const target = await loadTarget(db, parsed.data.profileId);
   if (!target) return fail(404, "Profile not found");
   if (target.status === "suspended") return fail(409, "This Profile is already suspended");
-  // D1 runs batches one at a time. The audit entry is written first and only while
-  // the Profile is not yet suspended, so when two suspensions race, the second one
-  // writes nothing and reports 409 instead of adding a second entry.
-  const { profiles, adminAuditLog } = schema;
-  const [audit] = await db.batch([
-    db.insert(adminAuditLog).select(db.select({
-      id: sql<string>`${crypto.randomUUID()}`.as("id"),
-      actorGoogleSub: sql<string>`${actor.googleSub}`.as("actor_google_sub"),
-      action: sql<schema.AdminAuditAction>`'suspend'`.as("action"),
-      targetProfileId: profiles.id,
-      targetSlug: profiles.slug,
-      reason: sql<string>`${parsed.data.reason}`.as("reason"),
-      createdAt: sql<number>`unixepoch()`.as("created_at"),
-    }).from(profiles).where(and(eq(profiles.id, target.id), ne(profiles.status, "suspended")))),
-    ...snapshotDeleteStatements(db, target.id),
-    db.update(schema.profiles).set({ status: "suspended", updatedAt: Math.floor(Date.now() / 1000) }).where(and(eq(schema.profiles.id, target.id), ne(schema.profiles.status, "suspended"))),
-  ]);
-  if (!audit.meta.changes) return fail(409, "This Profile is already suspended");
+  const suspended = await lifecycle.suspend(db, target.id, { actorGoogleSub: actor.googleSub, reason: parsed.data.reason });
+  if (!suspended) return fail(409, "This Profile is already suspended");
   return { status: 200, body: { ok: true, slug: target.slug } };
 }
