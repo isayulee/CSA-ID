@@ -1,3 +1,4 @@
+import "server-only";
 import { eq } from "drizzle-orm";
 import { publishedProfiles, users } from "@/lib/db/schema";
 import { readDraft } from "@/lib/profile-data";
@@ -41,7 +42,7 @@ export async function deleteAccount(db: Db, kv: KVNamespace, userId: string) {
   if (!draft) return null;
   const { profile } = draft;
   const [published] = await db.select({ avatarKey: publishedProfiles.avatarKey, backgroundKey: publishedProfiles.backgroundKey }).from(publishedProfiles).where(eq(publishedProfiles.profileId, profile.id)).limit(1);
-  await lifecycle.deleteAccount(db, userId, profile.id);
+  await lifecycle.deleteUser(db, userId, profile.id);
   try {
     await deleteImages(kv, profile.id, [profile.avatarKey, profile.backgroundKey, published?.avatarKey ?? null, published?.backgroundKey ?? null]);
   } catch (error) {

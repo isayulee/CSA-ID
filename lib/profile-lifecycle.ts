@@ -6,17 +6,21 @@ import { evaluationFormUrl, isCsaEvaluationForm } from "@/lib/evaluation-form";
 import { adminAuditLog, draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, reservedSlugs, sessions, users, type AdminAuditAction, type Profile } from "@/lib/db/schema";
 
 /**
- * Every Profile status change: publish, unpublish, suspend and account deletion.
- * Nothing outside this module writes `profiles.status` or the Published Profile
- * tables. Each change is one D1 batch, which D1 applies as one transaction.
+ * Every Profile status change: publish, unpublish, suspend and deleting a User.
+ * It is the only writer of `profiles.status` and the Published Profile tables,
+ * so the Administrator's image removal clears its keys here too. Each change is
+ * one D1 batch, which D1 applies as one transaction.
  */
+
+/** Who asked for an Administrator action, and why. Written to the audit log. */
+export type AuditNote = { actorGoogleSub: string; reason: string };
 
 export type PublishResult = { ok: true; slug: string } | { ok: false; status: 400 | 403 | 409; error: string };
 
 const unixNow = () => Math.floor(Date.now() / 1000);
 
-// A Suspended Profile never comes back through any status change. These two
-// conditions are the only place that rule is written.
+// A Suspended Profile never comes back: publish and suspend guard their writes
+// with these two conditions, and unpublish only moves a `published` Profile.
 const isSuspended = (profileId: string) => and(eq(profiles.id, profileId), eq(profiles.status, "suspended"));
 const notSuspended = (profileId: string) => and(eq(profiles.id, profileId), ne(profiles.status, "suspended"));
 
@@ -79,7 +83,7 @@ export async function unpublish(db: Db, profileId: string) {
  * audit entry. Ownership and the reserved Slug stay. Returns false, writing
  * nothing, when the Profile is already suspended.
  */
-export async function suspend(db: Db, profileId: string, audit: { actorGoogleSub: string; reason: string }) {
+export async function suspend(db: Db, profileId: string, audit: AuditNote) {
   // D1 runs batches one at a time. The audit entry is written first and only while
   // the Profile is not yet suspended, so when two suspensions race, the second one
   // writes nothing instead of adding a second entry.
@@ -100,7 +104,7 @@ export async function suspend(db: Db, profileId: string, audit: { actorGoogleSub
 }
 
 /** Clears the image keys on the Draft Profile and its Published Profile and writes the audit entry. */
-export async function clearImageKeys(db: Db, profile: { id: string; slug: string | null }, audit: { actorGoogleSub: string; reason: string }) {
+export async function clearImageKeys(db: Db, profile: { id: string; slug: string | null }, audit: AuditNote) {
   await db.batch([
     db.update(profiles).set({ avatarKey: null, backgroundKey: null }).where(eq(profiles.id, profile.id)),
     db.update(publishedProfiles).set({ avatarKey: null, backgroundKey: null }).where(eq(publishedProfiles.profileId, profile.id)),
@@ -109,11 +113,11 @@ export async function clearImageKeys(db: Db, profile: { id: string; slug: string
 }
 
 /**
- * Deletes the User's account. Deleting the user row cascades to the Profile,
+ * Deletes the User. Deleting the user row cascades to the Profile,
  * Draft Social Links and Sessions, and `reserved_slugs` keeps the Slug with its
  * profile_id cleared. A failure leaves the account exactly as it was.
  */
-export async function deleteAccount(db: Db, userId: string, profileId: string) {
+export async function deleteUser(db: Db, userId: string, profileId: string) {
   await db.batch([
     ...unpublishStatements(db, profileId),
     db.delete(sessions).where(eq(sessions.userId, userId)),
