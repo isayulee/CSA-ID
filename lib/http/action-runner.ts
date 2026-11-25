@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getBindings } from "@/lib/cloudflare";
 import { getDb } from "@/lib/db";
 import { purgeProfilePage } from "@/lib/edge-cache";
-import { guardMutation } from "./mutation-guard";
+import { guardMutation, type GuardOptions } from "./mutation-guard";
 
 export type MutationResult = {
   status?: number;
@@ -15,8 +15,6 @@ export type MutationResult = {
   changedSlug?: string | null;
   endSession?: boolean;
 };
-
-type GuardOptions = { maxBytes?: number; body?: false };
 
 /**
  * Runs one User or Administrator mutation: `guardMutation` first, then the
