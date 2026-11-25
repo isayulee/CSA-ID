@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
 import { getCurrentAccount } from "@/lib/auth/current-user";
 import { getDb } from "@/lib/db";
+import { runMutation } from "@/lib/http/action-runner";
 import { claimSlug } from "@/lib/profile-data";
-import { guardMutation } from "@/lib/http/mutation-guard";
 
 export async function POST(request: Request) {
-  const guard = await guardMutation(request, getCurrentAccount, { maxBytes: 1024 });
-  if (!guard.ok) return guard.response;
-  const slug = (guard.body as { slug?: unknown } | null)?.slug;
-  const result = await claimSlug(getDb(), guard.account.user.id, slug);
-  if (!result.ok) return NextResponse.json({ error: result.message }, { status: result.status });
-  return NextResponse.json({ ok: true, slug: result.slug });
+  return runMutation(request, getCurrentAccount, async ({ user }, body) => {
+    const result = await claimSlug(getDb(), user.id, (body as { slug?: unknown } | null)?.slug);
+    if (!result.ok) return { status: result.status, body: { error: result.message } };
+    return { body: { ok: true, slug: result.slug } };
+  }, { maxBytes: 1024 });
 }
