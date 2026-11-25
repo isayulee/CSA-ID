@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
-import { unpublish as unpublishProfile } from "@/lib/profile-lifecycle";
+import { unpublish } from "@/lib/profile-lifecycle";
 import { profileCacheKey, withProfileEdgeCache } from "@/lib/edge-cache";
 import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, users } from "@/lib/db/schema";
 import { createTestDb } from "./helpers";
@@ -35,7 +35,7 @@ describe("public profile lookup", () => {
   });
 
   it("gives the same null for missing, draft, unpublished and suspended Slugs", async () => {
-    await unpublishProfile(t.db, "unpub");
+    await unpublish(t.db, "unpub");
     const results = await Promise.all(["nope", "drafty", "unpub", "banned"].map((slug) => loadPublishedProfile(t.db, slug)));
     expect(results).toEqual([null, null, null, null]);
   });
@@ -45,7 +45,7 @@ describe("unpublish", () => {
   it("removes the snapshot, flips status to draft and keeps the draft", async () => {
     await seed("again", "again", "published", true);
     await t.db.insert(draftSocialLinks).values({ id: "d-again", profileId: "again", service: "github", url: "https://github.com/x", displayOrder: 0 });
-    await unpublishProfile(t.db, "again");
+    await unpublish(t.db, "again");
     expect(await loadPublishedProfile(t.db, "again")).toBeNull();
     const [row] = await t.db.select().from(profiles).where(eq(profiles.id, "again"));
     expect(row.status).toBe("draft");
@@ -54,7 +54,7 @@ describe("unpublish", () => {
   });
 
   it("does not un-suspend a suspended profile", async () => {
-    await unpublishProfile(t.db, "banned");
+    await unpublish(t.db, "banned");
     const [row] = await t.db.select().from(profiles).where(eq(profiles.id, "banned"));
     expect(row.status).toBe("suspended");
   });

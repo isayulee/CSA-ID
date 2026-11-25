@@ -1,3 +1,4 @@
+import "server-only";
 import { eq } from "drizzle-orm";
 import { users } from "@/lib/db/schema";
 import { deleteAllImages, keysInUse } from "@/lib/images/profile-images";
@@ -31,7 +32,7 @@ export async function deleteAccount(db: Db, kv: KVNamespace, userId: string) {
   if (!draft) return null;
   const { profile } = draft;
   const images = await keysInUse(db, profile);
-  await lifecycle.deleteAccount(db, userId, profile.id);
+  await lifecycle.deleteUser(db, userId, profile.id);
   try {
     await deleteAllImages(kv, profile.id, images);
   } catch (error) {
