@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { adminAuditLog, profiles, publishedProfiles, users } from "@/lib/db/schema";
 import { UploadError } from "@/lib/images/policy";
-import { isImageKey, removeImages, replaceImage } from "@/lib/images/profile-images";
+import { deleteAllImages, isImageKey, removeImages, replaceImage } from "@/lib/images/profile-images";
 import { createTestDb } from "./helpers";
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -13,6 +13,7 @@ function fakeKv() {
   const kv = {
     put: async (key: string, value: unknown) => { if (failing.put) throw new Error("KV unavailable"); store.set(key, value); },
     delete: async (key: string) => { if (failing.delete) throw new Error("KV unavailable"); store.delete(key); },
+    list: async ({ prefix }: { prefix: string }) => ({ keys: [...store.keys()].filter((name) => name.startsWith(prefix)).map((name) => ({ name })), list_complete: true }),
   };
   return { store, failing, kv: kv as unknown as KVNamespace };
 }
@@ -97,5 +98,18 @@ describe("removeImages", () => {
   it("reports false when the Profile shows no image", async () => {
     await t.db.update(profiles).set({ avatarKey: null }).where(eq(profiles.id, PROFILE));
     expect(await removeImages({ db: t.db, kv: kv.kv }, await target(), audit)).toBe(false);
+  });
+});
+
+describe("deleteAllImages", () => {
+  it("deletes the known keys and every other key under the Profile, and nothing of another Profile", async () => {
+    const stray = `img/${PROFILE}/background/00000000-0000-4000-8000-0000000000cc.webp`;
+    const known = "img/legacy-key.webp";
+    const other = "img/0f1e2d3c-0000-4000-8000-000000000002/avatar/00000000-0000-4000-8000-0000000000dd.webp";
+    for (const key of [stray, known, other]) kv.store.set(key, "image");
+
+    await deleteAllImages(kv.kv, PROFILE, new Set([known]));
+
+    expect([...kv.store.keys()]).toEqual([other]);
   });
 });

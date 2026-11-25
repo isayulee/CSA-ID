@@ -32,7 +32,9 @@ export async function keysInUse(db: Db, profile: ImageOwner) {
 /**
  * Re-encodes `upload`, stores it under a new key and points the owner's Draft
  * Profile at it. The image it replaced is deleted unless the Published Profile
- * still shows it. Returns the new key. Throws UploadError on a refused upload.
+ * still shows it; that cleanup is best effort, since the new image is already
+ * saved. Returns the new key. Throws UploadError when the upload is refused or
+ * cannot be saved.
  */
 export async function replaceImage(env: { db: Db; kv: KVNamespace; images: ImagesBinding }, owner: { userId: string; profile: ImageOwner }, kind: UploadKind, upload: Uint8Array) {
   const { db, kv } = env;
@@ -46,7 +48,10 @@ export async function replaceImage(env: { db: Db; kv: KVNamespace; images: Image
     throw new UploadError(503, "The image could not be saved. Try again later.");
   }
   const replaced = profile[column[kind]];
-  if (replaced && !(await keysInUse(db, { ...profile, [column[kind]]: key })).has(replaced)) await kv.delete(replaced).catch(() => {});
+  if (replaced) {
+    const inUse = await keysInUse(db, { ...profile, [column[kind]]: key }).catch(() => new Set([replaced]));
+    if (!inUse.has(replaced)) await kv.delete(replaced).catch(() => {});
+  }
   return key;
 }
 
@@ -58,7 +63,7 @@ export async function replaceImage(env: { db: Db; kv: KVNamespace; images: Image
  * so a retry finds and removes them. The other order could leave an abusive
  * image reachable at its /media URL with nothing in D1 pointing to it.
  */
-export async function removeImages(env: { db: Db; kv: Pick<KVNamespace, "delete"> }, profile: ImageOwner & Pick<Profile, "slug">, audit: { actorGoogleSub: string; reason: string }) {
+export async function removeImages(env: { db: Db; kv: Pick<KVNamespace, "delete"> }, profile: ImageOwner & Pick<Profile, "slug">, audit: lifecycle.AuditNote) {
   const keys = await keysInUse(env.db, profile);
   if (keys.size === 0) return false;
   await Promise.all([...keys].map((key) => env.kv.delete(key)));
