@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { loadPublishedProfile, unpublishProfile } from "@/lib/public/published-profile";
+import { loadPublishedProfile } from "@/lib/public/published-profile";
+import { unpublish as unpublishProfile } from "@/lib/profile-lifecycle";
 import { profileCacheKey, withProfileEdgeCache } from "@/lib/edge-cache";
 import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, users } from "@/lib/db/schema";
 import { createTestDb } from "./helpers";
