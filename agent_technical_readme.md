@@ -468,6 +468,7 @@ An implementation is incomplete until all applicable checks pass:
 - [ ] NFC cards remain writable until a stable custom domain exists.
 - [ ] Mobile Chrome and Safari layouts, keyboard navigation, focus states, contrast, and reduced motion are verified.
 - [ ] Only approved Peer Advisers and Administrators reach Portal pages and Portal endpoints (section 14).
+- [ ] Only members of a Project and Administrators reach its Boards and Tasks, and a Peer Adviser who is not an SA moves only Tasks assigned to them (section 15).
 
 ## 14. Peer Adviser's Portal
 
@@ -478,6 +479,7 @@ The Portal lives in the same Worker, uses the same Google sign-in and Sessions, 
 - **User:** anyone signed in with Google. Can own a Profile. Cannot open the Portal.
 - **Peer Adviser:** a User with a row in `peer_advisers`. An Administrator creates that row (approval) and deletes it (revocation). Only Peer Advisers claim or are assigned Advising Requests, appear in Matching, and appear in the Directory.
 - **Officer:** a Peer Adviser whose `officer_position` is set. Display only; grants no right.
+- **Student Assistant (SA):** a Peer Adviser whose `student_assistant` flag is set. An Administrator sets and clears it. It grants rights only inside Projects (section 15); everywhere in this section an SA is an ordinary Peer Adviser. An SA may also be an Officer.
 - **Administrator:** a User on the `ADMIN_GOOGLE_SUBS` allowlist (up to about five). Can open the Portal without a `peer_advisers` row and can do everything below. An Administrator who also tutors is approved as a Peer Adviser too.
 
 ### 14.2 Access rules
@@ -492,7 +494,8 @@ The Portal lives in the same Worker, uses the same Google sign-in and Sessions, 
 | Unclaimed Advising Request | Read course, campus, topic, attendee count, times, and Matching results | Read all; assign to any Peer Adviser |
 | Claimed Advising Request | Full details and notes only if they claimed it; otherwise course, campus, status, and claimant name | Full details and notes |
 | Status, schedule, slots, notes | Change only on requests they claimed | Change on any request |
-| `peer_advisers` rows, Officer positions | None | Write |
+| `peer_advisers` rows, Officer positions, SA flag | None | Write |
+| Projects, Boards, Columns, Tasks | Section 15 | Section 15 |
 
 Enforce the table in the data-access module, the same way the owner-scoping rule is enforced:
 
@@ -500,8 +503,8 @@ Enforce the table in the data-access module, the same way the owner-scoping rule
 - Request functions that return advisee personal data take the authenticated Peer Adviser and check `claimed_by_user_id = <session user>` or the allowlist inside the function.
 - Claiming is one guarded update: `set claimed_by_user_id = <session user>, claimed_at = unixepoch() where id = ? and claimed_by_user_id is null and exists (<the session user's peer_advisers row>)`. Two Peer Advisers claiming at once produce one winner. Giving a request back clears both columns, and only where the claimant is the session User.
 - Approving runs one D1 batch: insert the `peer_advisers` row with its `campus_id` and write `approve_peer_adviser`.
-- Revoking approval runs one D1 batch: delete the `peer_advisers` row (its courses taught and Availability cascade), set `claimed_by_user_id = null` on that User's requests whose status is `pending` or `rescheduled`, and write `revoke_peer_adviser` with a required reason. A Peer Adviser approved again re-enters their courses and Availability.
-- Every Administrator action in the Portal writes an `admin_audit_log` entry (section 6) in the same batch: approve, revoke, or update a Peer Adviser (Campus, Officer position, Directory order); assign a request; approve or reject a Kit Draft; edit, merge, or delete a Course; add a Campus. A Peer Adviser's own actions are not audited. Neither are an Administrator's changes to a request's status, schedule, or notes.
+- Revoking approval runs one D1 batch: delete the `peer_advisers` row (its courses taught and Availability cascade), set `claimed_by_user_id = null` on that User's requests whose status is `pending` or `rescheduled`, delete that User's `task_assignees` and `project_members` rows (section 15), and write `revoke_peer_adviser` with a required reason. A Peer Adviser approved again re-enters their courses and Availability.
+- Every Administrator action in the Portal writes an `admin_audit_log` entry (section 6) in the same batch: approve, revoke, or update a Peer Adviser (Campus, Officer position, Directory order, SA flag; clearing the SA flag needs a reason); assign a request; approve or reject a Kit Draft; edit, merge, or delete a Course; add a Campus. A Peer Adviser's own actions are not audited. Neither are an Administrator's changes to a request's status, schedule, or notes.
 - Tests prove that a non-approved User cannot read any Portal data, that Peer Adviser A cannot read the personal data or notes of a request Peer Adviser B claimed, and that Peer Adviser A cannot change B's courses or Availability.
 
 ### 14.3 Data model
@@ -537,6 +540,7 @@ create table peer_advisers (
   campus_id text not null references campuses(id) on delete restrict,
   officer_position text check (officer_position is null or length(officer_position) between 1 and 64),
   officer_order integer check (officer_order is null or officer_order between 1 and 99),  -- order in the Directory
+  student_assistant integer not null default 0 check (student_assistant in (0, 1)),       -- section 15; added by its own migration
   approved_at integer not null default (unixepoch()),
   check ((officer_position is null) = (officer_order is null))
 );
@@ -748,10 +752,165 @@ The Scheduler shows a **Notify on Teams** button on a claimed request. It opens 
 | `GET /portal/scheduler` | Peer Adviser | Advising Requests, filterable by status, Course, campus, and claimant |
 | `GET /portal/directory` | Peer Adviser | Peer Advisers and Officers by position |
 | `GET /portal/me` | Peer Adviser | Campus, courses taught, weekly Availability grid |
-| `GET /admin/peer-advisers` | Administrator | Approve, revoke, set Campus and Officer position |
+| `GET /portal/tasks`, `/portal/tasks/[boardId]` | Peer Adviser | Projects and their Boards (section 15) |
+| `GET /admin/peer-advisers` | Administrator | Approve, revoke, set Campus, Officer position and SA flag |
 | `GET /admin/kit-drafts` | Administrator | Review pending Kit Drafts |
 | `POST /api/portal/...` | Peer Adviser | Claim, give back, set status, schedule, slots, notes; Kit Draft writes; file upload; Course add; own Campus, courses, and Availability |
 | `POST /api/admin/...` | Administrator | Approve, revoke, or update a Peer Adviser; assign a request; review a Kit Draft; edit, merge, or delete a Course; add a Campus |
 | `POST /api/intake/advising-requests` | Apps Script | Intake (section 14.4) |
 
 Every browser mutation above goes through `guardMutation`, then `requirePeerAdviser()` or the Administrator check. Portal pages send `Cache-Control: private, no-store` and `noindex`.
+
+## 15. Projects and Tasks
+
+Projects give the CSA a kanban board inside the Portal, so SAs can hand out and track work. They live in the same D1 database and add no Cloudflare resource or library. They follow section 14's access check: nobody without `requirePeerAdviser()` reaches any of it.
+
+### 15.1 Membership
+
+- Three default Projects exist from the migration that adds these tables, marked by `default_key`. Their members are derived from roles, never stored:
+  - `peer_advisers`: every Peer Adviser.
+  - `student_assistants`: every Peer Adviser with `student_assistant = 1`.
+  - `officers`: every Peer Adviser with `officer_position` set.
+- A custom Project stores its members in `project_members`. Only Peer Advisers can be members.
+- Administrators see every Project whether or not they are members.
+- Nobody leaves a Project. Default membership changes with roles; an Administrator changes custom membership.
+- Find a default Project by `default_key`, never by name, because Administrators may rename it.
+
+### 15.2 Access rules
+
+An SA has SA rights only in Projects they belong to.
+
+| Action | Peer Adviser member | SA member | Administrator |
+| --- | --- | --- | --- |
+| Read the Project, its Boards, Columns and Tasks | Yes | Yes | Every Project |
+| Move a Task to another Column or position | Only Tasks assigned to them | Any Task | Any Task |
+| Create, edit and delete Tasks; set assignees and due date | No | Yes | Yes |
+| Create, rename, reorder and archive Boards | No | Yes | Yes |
+| Add, rename, reorder and delete Columns; choose the done Column | No | Yes | Yes |
+| Create a custom Project, pick its members, archive it | No | No | Yes |
+| Rename any Project | No | No | Yes |
+
+Enforce the table in one data-access function that every Tasks read and write calls with the User from the Session. A non-member gets a 404, so a Project's existence is not revealed. For a Peer Adviser who is not an SA, the assignment check lives inside the move itself: `... where id = ? and exists (select 1 from task_assignees where task_id = ? and user_id = <session user>)`.
+
+Tests prove that:
+
+- a non-member cannot read or change any Project, Board or Task;
+- Peer Adviser A cannot move a Task assigned only to B;
+- a Peer Adviser who is not an SA cannot create, edit, delete or assign a Task, or change a Column or Board;
+- only Administrators manage Projects.
+
+### 15.3 Data model
+
+```sql
+create table projects (
+  id text primary key,
+  default_key text unique check (default_key is null or default_key in ('peer_advisers', 'student_assistants', 'officers')),
+  name text not null check (length(name) between 1 and 64),
+  archived_at integer,
+  created_by_user_id text references users(id) on delete set null,
+  created_at integer not null default (unixepoch()),
+  updated_at integer not null default (unixepoch()),
+  check (default_key is null or archived_at is null)    -- default Projects are never archived
+);
+
+-- Custom Projects only; default Projects derive members from peer_advisers.
+create table project_members (
+  project_id text not null references projects(id) on delete cascade,
+  user_id text not null references users(id) on delete cascade,
+  added_at integer not null default (unixepoch()),
+  primary key (project_id, user_id)
+);
+
+-- board_type has no check: more types will come, and changing a check rebuilds the table.
+-- The server accepts only 'kanban' until another type exists.
+create table boards (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null check (length(name) between 1 and 64),
+  board_type text not null default 'kanban',
+  position integer not null,
+  archived_at integer,
+  created_by_user_id text references users(id) on delete set null,
+  created_at integer not null default (unixepoch()),
+  updated_at integer not null default (unixepoch())
+);
+
+create table board_columns (
+  id text primary key,
+  board_id text not null references boards(id) on delete cascade,
+  name text not null check (length(name) between 1 and 32),
+  position integer not null,
+  is_done integer not null default 0 check (is_done in (0, 1)),
+  unique (board_id, id)                                 -- target of the tasks composite key
+);
+
+create table tasks (
+  id text primary key,
+  board_id text not null references boards(id) on delete cascade,
+  column_id text not null,
+  position integer not null,
+  title text not null check (length(title) between 1 and 200),
+  description text not null default '' check (length(description) <= 4000),
+  due_on text check (due_on is null or due_on glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  version integer not null default 1,                   -- section 15.5
+  created_by_user_id text references users(id) on delete set null,
+  updated_by_user_id text references users(id) on delete set null,
+  created_at integer not null default (unixepoch()),
+  updated_at integer not null default (unixepoch()),
+  foreign key (board_id, column_id) references board_columns(board_id, id) on delete restrict
+);
+
+create table task_assignees (
+  task_id text not null references tasks(id) on delete cascade,
+  user_id text not null references users(id) on delete cascade,
+  primary key (task_id, user_id)
+);
+
+create index boards_project_idx on boards(project_id, position);
+create index board_columns_board_idx on board_columns(board_id, position);
+create unique index board_columns_one_done on board_columns(board_id) where is_done = 1;
+create index tasks_column_idx on tasks(column_id, position);
+create index task_assignees_user_idx on task_assignees(user_id);   -- My Tasks
+create index project_members_user_idx on project_members(user_id);
+```
+
+Notes on the tables:
+
+- **Seed:** the migration inserts the three default Projects (Peer Advisers, Student Assistants, Officers) with fixed IDs. Each gets one kanban Board with **Ready**, **In Progress** and **Done**, and **Done** has `is_done = 1`. Every new Board starts with the same three Columns.
+- **The done Column:** each Board has exactly one. An SA may move the mark to another Column but cannot delete the Column that holds it, so My Tasks always knows which Tasks are finished.
+- **Deleting a Column** is refused while it holds Tasks, and the composite foreign key refuses it in the database too. It also keeps a Task's Column on the Task's own Board.
+- **A Task never moves to another Board or Project.**
+- **Archiving** sets `archived_at`. An archived Board or Project is read-only and left out of default lists. Nothing is hard-deleted except Tasks and empty Columns.
+- **Revoking a Peer Adviser** deletes their `task_assignees` and `project_members` rows in the revocation batch (section 14.2). Their Tasks stay. Account deletion removes the same rows by cascade and keeps their Tasks with the author set to null.
+- **Deferred:** labels, comments, checklists, attachments and a per-change history. Each would add written rows against D1's daily budget.
+
+### 15.4 Ordering and moves
+
+- Positions are gapped integers, 1024 apart. A move sets the Task's `column_id` and a `position` between its new neighbours, so it writes one row.
+- When no gap is left, the server renumbers that one Column in a single batch, then makes the move.
+- The interface uses the browser's own drag and drop plus a "Move to…" menu that works with a keyboard and on touch screens. No drag-and-drop library ships in the Worker.
+
+### 15.5 Concurrent edits
+
+Boards are not live, so two people can edit from stale pages. Every Task write sends the `version` it read and runs `update ... set ..., version = version + 1 where id = ? and version = ?`. When no row changes, the endpoint returns 409 and the page reloads the Task. Reordering Columns or Boards sends the order it read and is refused the same way when that order changed.
+
+### 15.6 My Tasks
+
+The Portal home lists the viewer's open Tasks: assigned to them, not in a done Column, and on a Board and Project that are not archived and that the viewer can still reach. They are sorted by `due_on`, with undated Tasks last. A Task is overdue when `due_on` is before today's date in Asia/Manila. Nothing is sent by email or push.
+
+### 15.7 Audit
+
+- Setting or clearing the SA flag writes `update_peer_adviser`, which the `admin_audit_log` check already allows. Clearing it needs a reason.
+- Creating, renaming and archiving a Project and changing a custom Project's members are Administrator actions. They need new actions (`create_project`, `rename_project`, `archive_project`, `update_project_members`) and a `project` target type. `admin_audit_log` lists its actions in a check, so the migration that adds them rebuilds that table: it copies the rows and recreates the append-only triggers, and a test covers both.
+- Board, Column and Task changes are not audited, whether an SA or an Administrator makes them, in line with section 14.2. Each Task keeps `created_by_user_id` and `updated_by_user_id`.
+
+### 15.8 Routes
+
+| Route | Who | Purpose |
+| --- | --- | --- |
+| `GET /portal/tasks` | Peer Adviser | The viewer's Projects and their Boards |
+| `GET /portal/tasks/[boardId]` | Member or Administrator | One Board with its Columns and Tasks |
+| `POST /api/portal/tasks/...` | Member or Administrator, per section 15.2 | Task create, edit, move, delete and assignees; Board and Column changes |
+| `POST /api/admin/projects/...` | Administrator | Create, rename and archive Projects; custom Project members |
+
+Every mutation goes through `guardMutation` with the default 16 KiB cap, then `requirePeerAdviser()` or the Administrator check, then the section 15.2 check. Pages send `Cache-Control: private, no-store` and `noindex`.

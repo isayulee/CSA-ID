@@ -48,10 +48,10 @@ _Avoid_: Profile, account, managed card
 
 **Peer Adviser**:
 A Mapúa CSA student who tutors fellow students: a User whom an Administrator has approved to use the Portal.
-_Avoid_: Student assistant, tutor, mentor
+_Avoid_: Tutor, mentor
 
 **Portal**:
-The signed-in workspace only Peer Advisers can open, holding Teaching Kits, the Directory, the Scheduler and Matching.
+The signed-in workspace only Peer Advisers can open, holding Teaching Kits, the Directory, the Scheduler, Matching and Projects.
 _Avoid_: Dashboard, admin panel
 
 **Directory**:
@@ -61,6 +61,10 @@ _Avoid_: Org chart, roster, members list
 **Officer**:
 A Peer Adviser who holds a named position in the CSA's organizational structure; the position grants no extra rights.
 _Avoid_: Admin, moderator
+
+**Student Assistant**:
+A Peer Adviser who also works in the CSA office on its operations, and whom an Administrator has marked as one; written SA for short.
+_Avoid_: Staff, office aide
 
 **Teaching Kit**:
 A set of study materials for one course and academic term that Peer Advisers use in tutoring sessions.
@@ -102,6 +106,24 @@ _Avoid_: Queue, calendar, booking system
 The Portal's ranked suggestion of Peer Advisers for an unassigned Advising Request; a person still makes the assignment.
 _Avoid_: Auto-assign, pairing algorithm
 
+## Projects
+
+**Project**:
+A group of Portal people who share work, holding one or more Boards.
+_Avoid_: Workspace, team, group
+
+**Board**:
+A view of a Project's work with one board type; kanban is the only type for now.
+_Avoid_: Space
+
+**Column**:
+One named stage on a kanban Board; exactly one Column on each Board is its done Column.
+_Avoid_: List, lane, stage, status
+
+**Task**:
+One piece of work on a Board, sitting in exactly one of its Columns and assigned to zero or more members of the Project.
+_Avoid_: Card, ticket, issue, to-do
+
 ## Relationships
 
 - A **Peer Adviser** is a **User** and owns one **Profile**
@@ -109,3 +131,6 @@ _Avoid_: Auto-assign, pairing algorithm
 - A **Teaching Kit** belongs to one **Course** and one **Academic Term**
 - A **Peer Adviser** tutors on one **Campus** and keeps one **Availability**
 - An **Advising Request** comes from one **Advisee** and names one **Campus**
+- An **SA** is a **Peer Adviser**; the mark is a separate grant from an Officer position
+- A **Project** holds one or more **Boards**; a **Board** has its own **Columns** and **Tasks**
+- A **Task** belongs to one **Board** and one of that Board's **Columns**, and never moves to another Board
