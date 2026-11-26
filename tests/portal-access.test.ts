@@ -14,6 +14,7 @@ const access = await import("@/lib/portal/access");
 const approve = await import("@/app/api/admin/peer-advisers/approve/route");
 const revoke = await import("@/app/api/admin/peer-advisers/revoke/route");
 const campus = await import("@/app/api/admin/peer-advisers/campus/route");
+const studentAssistant = await import("@/app/api/admin/peer-advisers/student-assistant/route");
 
 let t: TestDb;
 const ORIGIN = "http://localhost:3100";
@@ -177,5 +178,70 @@ describe("Administrator Peer Adviser endpoints", () => {
     expect(await auditFor("fay")).toHaveLength(1);
     state.current = { user: (await t.db.select().from(users).where(eq(users.id, "fay")))[0], profile: null };
     expect(await access.requirePeerAdviser()).toBeNull();
+  });
+});
+
+describe("Administrator Student Assistant endpoint", () => {
+  const setSa = (body: unknown) => studentAssistant.POST(post("/api/admin/peer-advisers/student-assistant", body));
+  const flagOf = async (userId: string) =>
+    (await t.db.select({ sa: peerAdvisers.studentAssistant }).from(peerAdvisers).where(eq(peerAdvisers.userId, userId)))[0]?.sa;
+
+  it("let neither a Peer Adviser nor a Student Assistant change anyone's flag, their own included", async () => {
+    await seedUser("gil");
+    await t.db.insert(peerAdvisers).values({ userId: "gil", campusId: "intramuros", studentAssistant: true });
+    await seedUser("hal");
+    await t.db.insert(peerAdvisers).values({ userId: "hal", campusId: "intramuros" });
+    for (const actor of ["hal", "gil"]) {
+      await signIn(actor);
+      for (const userId of ["gil", "hal"]) {
+        expect((await setSa({ userId, studentAssistant: true })).status).toBe(401);
+        expect((await setSa({ userId, studentAssistant: false, reason: "x" })).status).toBe(401);
+      }
+    }
+    expect([await flagOf("gil"), await flagOf("hal")]).toEqual([true, false]);
+    expect([...await auditFor("gil"), ...await auditFor("hal")]).toEqual([]);
+  });
+
+  it("grant the flag with an audit entry, and write nothing when it is already set", async () => {
+    await seedUser("ida");
+    await t.db.insert(peerAdvisers).values({ userId: "ida", campusId: "intramuros" });
+    await signIn("admin");
+    expect((await setSa({ userId: "ida", studentAssistant: true })).status).toBe(200);
+    expect(await flagOf("ida")).toBe(true);
+    expect(await auditFor("ida")).toEqual([expect.objectContaining({ actorGoogleSub: "sub-admin", action: "update_peer_adviser", targetType: "user", targetLabel: "Student Assistant: on", reason: null })]);
+    expect((await setSa({ userId: "ida", studentAssistant: true })).status).toBe(200);
+    expect(await auditFor("ida")).toHaveLength(1);
+  });
+
+  it("reject a User who isn't a Peer Adviser or a malformed body", async () => {
+    await signIn("admin");
+    expect((await setSa({ userId: "una", studentAssistant: true })).status).toBe(404);
+    expect((await setSa({ userId: "ana", studentAssistant: "yes" })).status).toBe(400);
+    expect(await auditFor("una")).toEqual([]);
+    expect(await flagOf("ana")).toBe(false);
+  });
+
+  it("clear the flag only with a reason, and audit that reason", async () => {
+    await seedUser("jo");
+    await t.db.insert(peerAdvisers).values({ userId: "jo", campusId: "intramuros", studentAssistant: true });
+    await signIn("admin");
+    expect((await setSa({ userId: "jo", studentAssistant: false })).status).toBe(400);
+    expect((await setSa({ userId: "jo", studentAssistant: false, reason: "   " })).status).toBe(400);
+    expect(await flagOf("jo")).toBe(true);
+    expect(await auditFor("jo")).toEqual([]);
+    expect((await setSa({ userId: "jo", studentAssistant: false, reason: "Term ended" })).status).toBe(200);
+    expect(await flagOf("jo")).toBe(false);
+    expect(await auditFor("jo")).toEqual([expect.objectContaining({ action: "update_peer_adviser", targetLabel: "Student Assistant: off", reason: "Term ended" })]);
+  });
+
+  it("remove Student Assistant status when the Peer Adviser is revoked", async () => {
+    await seedUser("kai");
+    await t.db.insert(peerAdvisers).values({ userId: "kai", campusId: "intramuros", studentAssistant: true });
+    await signIn("admin");
+    expect((await revoke.POST(post("/api/admin/peer-advisers/revoke", { userId: "kai", reason: "Left the CSA" }))).status).toBe(200);
+    expect(await flagOf("kai")).toBeUndefined();
+    expect((await setSa({ userId: "kai", studentAssistant: true })).status).toBe(404);
+    expect((await approve.POST(post("/api/admin/peer-advisers/approve", { userId: "kai", campusId: "intramuros" }))).status).toBe(200);
+    expect(await flagOf("kai")).toBe(false);
   });
 });

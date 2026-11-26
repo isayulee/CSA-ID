@@ -238,8 +238,11 @@ export const peerAdvisers = sqliteTable("peer_advisers", {
   officerPosition: text("officer_position"),
   officerOrder: integer("officer_order"), // order in the Directory
   approvedAt: integer("approved_at").notNull().default(unixNow),
+  // Student Assistant (§15). Migration 0001 adds it with ALTER TABLE, so its check is a column constraint there.
+  studentAssistant: integer("student_assistant", { mode: "boolean" }).notNull().default(false),
 }, (table) => [
   index("peer_advisers_campus_idx").on(table.campusId),
+  check("peer_advisers_student_assistant_check", sql`${table.studentAssistant} in (0, 1)`),
   check("peer_advisers_officer_position_check", nullOr(table.officerPosition, sql`length(${table.officerPosition}) between 1 and 64`)),
   check("peer_advisers_officer_order_check", nullOr(table.officerOrder, sql`${table.officerOrder} between 1 and 99`)),
   check("peer_advisers_officer_check", sql`(${table.officerPosition} is null) = (${table.officerOrder} is null)`),
