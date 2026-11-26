@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import * as oauth from "oauth4webapi";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { profiles } from "@/lib/db/schema";
 import { googleConfig, googleIssuer } from "@/lib/auth/google";
 import { createSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/session";
 import { findOrCreateUser } from "@/lib/auth/users";
+import { prepareSignIn } from "@/lib/auth/sign-in-landing";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -26,11 +25,10 @@ export async function GET(request: Request) {
 
     const db = getDb();
     const user = await findOrCreateUser(db, { sub: claims.sub, email: claims.email, name: typeof claims.name === "string" ? claims.name : undefined });
-    const [profile] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, user.id)).limit(1);
-    if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId: user.id, displayName: user.name });
+    const landing = await prepareSignIn(db, user.id, { displayName: user.name });
 
     const token = await createSession(db, user.id);
-    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+    const response = NextResponse.redirect(new URL(landing, request.url));
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
     response.cookies.delete("oauth_state"); response.cookies.delete("oauth_nonce"); response.cookies.delete("oauth_verifier");
     return response;

@@ -13,7 +13,7 @@ import { services, type ProfileService } from "@/lib/profile-validation";
 const sections = ["Details", "Appearance", "Links"] as const;
 const labels: Record<ProfileService, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", github: "GitHub", youtube: "YouTube", tiktok: "TikTok", x: "X", website: "Website" };
 
-async function profileMutation(path: string, options: RequestInit) {
+export async function profileMutation(path: string, options: RequestInit) {
   try {
     const response = await fetch(path, options);
     const result = await response.json().catch(() => ({})) as { error?: string; slug?: string };
