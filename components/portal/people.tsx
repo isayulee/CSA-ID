@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { campuses, candidates, courses, hours, peerId, updatePreview, weekdays, type Adviser, type PreviewState } from "./model";
+import { campuses, courses, hours, peerId, updatePreview, weekdays, type Adviser, type PreviewState } from "./model";
 import styles from "./portal.module.css";
 
 export function AvailabilityGrid({ slots }: { slots: string[] }) {
@@ -65,62 +65,5 @@ export function Directory({ state }: { state: PreviewState }) {
       <p>{person.campus}</p>
       <small>{person.courses.length ? person.courses.join(" · ") : "No Courses listed"}</small>
     </article>)}</div>
-  </>;
-}
-
-export function PeerAdviserApprovals({ state }: { state: PreviewState }) {
-  const [notice, setNotice] = useState("");
-  const unapproved = candidates.filter((person) => !state.advisers.some((adviser) => person.id === adviser.id));
-  function save(event: FormEvent<HTMLFormElement>, adviser: Adviser) {
-    event.preventDefault();
-    const fields = new FormData(event.currentTarget);
-    const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value");
-    const withdrawn = action === "revoke";
-    if (withdrawn && !String(fields.get("reason") ?? "").trim()) { setNotice("Give a reason before revoking approval."); return; }
-    const position = String(fields.get("position") ?? "").trim();
-    const order = Number(fields.get("order"));
-    if (!withdrawn && position && (!Number.isInteger(order) || order < 1 || order > 99)) { setNotice("Enter a Directory order from 1 to 99 for an Officer."); return; }
-    updatePreview((current) => ({
-      ...current,
-      advisers: withdrawn ? current.advisers.filter((item) => item.id !== adviser.id) : current.advisers.map((item) =>
-        item.id === adviser.id ? { ...item, campus: String(fields.get("campus")), position, order: position ? order : 0 } : item),
-      requests: withdrawn ? current.requests.map((item) =>
-        item.claimant === adviser.id && ["pending", "rescheduled"].includes(item.status) ? { ...item, claimant: "" } : item) : current.requests,
-    }));
-    setNotice(withdrawn ? `Revoked approval for ${adviser.name}.` : `Saved changes for ${adviser.name}.`);
-  }
-
-  return <>
-    <header className={styles.pageHeading}><div><h1>Peer Adviser approvals</h1><p>Approve Peer Advisers and manage Campus and Officer positions.</p></div></header>
-    <p role="status">{notice}</p>
-    <div className={styles.stack}>
-      <h2>Awaiting approval</h2>
-      {unapproved.length === 0 && <p className={styles.panel}>No Users awaiting approval.</p>}
-      {unapproved.map((person) => <form className={`${styles.panel} ${styles.flex}`} key={person.id} onSubmit={(event) => {
-        event.preventDefault();
-        const campus = String(new FormData(event.currentTarget).get("campus"));
-        updatePreview((current) => ({ ...current, advisers: [...current.advisers, { ...person, campus, courses: [], slots: [], position: "", order: 0 }] }));
-        setNotice(`Approved ${person.name} as a Peer Adviser.`);
-      }}>
-        <strong>{person.name}</strong>
-        <label className={styles.field}>Campus<select name="campus">{campuses.map((campus) => <option key={campus}>{campus}</option>)}</select></label>
-        <button className={styles.button}>Approve</button>
-      </form>)}
-      <h2>Approved Peer Advisers</h2>
-      {state.advisers.length === 0 && <p className={styles.panel}>No approved Peer Advisers.</p>}
-      {state.advisers.map((adviser) => <form key={adviser.id} className={`${styles.panel} ${styles.stack}`} onSubmit={(event) => save(event, adviser)}>
-        <h3>{adviser.name}</h3>
-        <div className={styles.formGrid}>
-          <label className={styles.field}>Campus<select name="campus" defaultValue={adviser.campus}>{campuses.map((campus) => <option key={campus}>{campus}</option>)}</select></label>
-          <label className={styles.field}>Officer position<input name="position" defaultValue={adviser.position} maxLength={64} /></label>
-          <label className={styles.field}>Directory order<input name="order" type="number" min={1} max={99} defaultValue={adviser.order || ""} /></label>
-        </div>
-        <div className={styles.flex}><button className={styles.button} value="save">Save changes</button></div>
-        <details><summary>Revoke approval</summary><div className={styles.stack}>
-          <label className={styles.field}>Reason for revocation<input name="reason" maxLength={1000} /></label>
-          <div><button className={styles.secondary} value="revoke">Revoke approval for {adviser.name}</button></div>
-        </div></details>
-      </form>)}
-    </div>
   </>;
 }
