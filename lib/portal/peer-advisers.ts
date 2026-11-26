@@ -5,6 +5,7 @@ import { isAdministrator, type Actor } from "@/lib/admin";
 import { adminAuditLog, advisingRequests, campuses, peerAdvisers, users } from "@/lib/db/schema";
 import { portalFail, type PortalAdminDeps, type PortalDb, type PortalResult } from "./access";
 import { auditColumns } from "./audit";
+import { constraintFailed } from "./batch";
 
 const userId = z.string().min(1).max(64);
 const campusId = z.string().min(2).max(32);
@@ -35,8 +36,6 @@ async function loadPeerAdviser(db: PortalDb, id: string) {
 
 const peerAdviserRow = (id: string) => eq(peerAdvisers.userId, id);
 
-export const isUniqueViolation = (error: unknown) => /UNIQUE constraint failed|PRIMARY KEY/i.test(String((error as { cause?: unknown })?.cause ?? error));
-
 /** Approves a User as a Peer Adviser on a Campus: the `peer_advisers` row and its audit entry in one batch (§14.2). */
 export async function approvePeerAdviser({ db, adminSubs }: PortalAdminDeps, actor: Actor, raw: unknown): Promise<PortalResult> {
   if (!isAdministrator(actor, adminSubs)) return UNAUTHORIZED;
@@ -54,7 +53,7 @@ export async function approvePeerAdviser({ db, adminSubs }: PortalAdminDeps, act
       db.insert(adminAuditLog).values({ id: crypto.randomUUID(), actorGoogleSub: actor.googleSub, action: "approve_peer_adviser", targetType: "user", targetId: user.id, targetLabel: `${user.email} · ${campus.name}`.slice(0, 128) }),
     ]);
   } catch (error) {
-    if (isUniqueViolation(error)) return ALREADY;
+    if (constraintFailed(error, "UNIQUE")) return ALREADY;
     throw error;
   }
   return OK;
