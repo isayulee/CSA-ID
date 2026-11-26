@@ -112,7 +112,7 @@ export function PortalPreview({ area, kitId, edit, requestId = "" }: { area: Are
         campuses={campuses.map((name) => ({ id: name, name }))}
         onAction={runPreviewApproval}
       />}
-      {area === "kit-drafts" && <KitReviews drafts={state.drafts} />}
+      {area === "kit-drafts" && <KitReviews drafts={state.drafts} approvedKits={state.kits} />}
     </PortalShell>
   );
 }
