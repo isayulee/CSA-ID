@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { campuses, courses, hours, peerId, updatePreview, weekdays, type Adviser, type PreviewState } from "./model";
+import { hours, weekdays, type Adviser, type Course } from "./model";
 import styles from "./portal.module.css";
 
 export function AvailabilityGrid({ slots }: { slots: string[] }) {
@@ -18,20 +18,50 @@ export function AvailabilityGrid({ slots }: { slots: string[] }) {
   </div>;
 }
 
-export function Settings({ adviser }: { adviser?: Adviser }) {
+type SettingsValues = Pick<Adviser, "campus" | "courses" | "slots">;
+
+type SettingsProps = {
+  adviser?: Adviser;
+  campuses: readonly string[];
+  courses: readonly Course[];
+  onSave: (settings: SettingsValues) => string;
+  onAddCourse: (course: Course) => void;
+};
+
+export function Settings({ adviser, campuses, courses, onSave, onAddCourse }: SettingsProps) {
   const [notice, setNotice] = useState("");
+  const [courseError, setCourseError] = useState("");
   if (!adviser) return <><h1>Settings</h1><p>Peer Adviser approval is required to edit Availability.</p></>;
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
-    updatePreview((state) => ({
-      ...state,
-      advisers: state.advisers.map((item) => item.id === peerId ? {
-        ...item, campus: String(fields.get("campus")), courses: fields.getAll("course").map(String), slots: fields.getAll("slot").map(String),
-      } : item),
+    setNotice(onSave({
+      campus: String(fields.get("campus")),
+      courses: fields.getAll("course").map(String),
+      slots: fields.getAll("slot").map(String),
     }));
-    setNotice("Campus, Courses, and Availability saved in this preview.");
+  }
+
+  function addCourse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const code = String(fields.get("code") ?? "").trim().toUpperCase();
+    const title = String(fields.get("title") ?? "").trim();
+    setCourseError("");
+    setNotice("");
+    if (!code || !title) {
+      setCourseError("Enter the Course code and title.");
+      return;
+    }
+    if (courses.some((course) => course.code === code)) {
+      setCourseError(`${code} is already in the Course list.`);
+      return;
+    }
+    onAddCourse({ code, title });
+    form.reset();
+    setNotice(`Added ${code}. Select it under Courses taught to add it to your settings.`);
   }
 
   return <>
@@ -49,13 +79,29 @@ export function Settings({ adviser }: { adviser?: Adviser }) {
         <AvailabilityGrid slots={adviser.slots} />
       </section>
       <div><button className={styles.button}>Save settings</button></div>
-      <small role="status">{notice}</small>
     </form>
+    <form onSubmit={addCourse} className={`${styles.panel} ${styles.stack}`} aria-labelledby="add-course-heading">
+      <h2 id="add-course-heading">Add a Course</h2>
+      <div className={styles.formGrid}>
+        <label className={styles.field}>Course code<input name="code" required maxLength={32} /></label>
+        <label className={styles.field}>Course title<input name="title" required maxLength={128} /></label>
+      </div>
+      <div><button className={styles.secondary}>Add Course</button></div>
+      <p role="alert" className={styles.error}>{courseError}</p>
+    </form>
+    <p role="status">{notice}</p>
   </>;
 }
 
-export function Directory({ state }: { state: PreviewState }) {
-  const people = state.advisers.toSorted((a, b) => (a.order || 100) - (b.order || 100) || a.name.localeCompare(b.name));
+type DirectoryEntry = Pick<Adviser, "id" | "name" | "position" | "order" | "campus" | "courses">;
+
+export function Directory({ advisers }: { advisers: readonly DirectoryEntry[] }) {
+  const people = advisers.toSorted((a, b) => {
+    if (a.position && b.position) return a.order - b.order || a.name.localeCompare(b.name);
+    if (a.position) return -1;
+    if (b.position) return 1;
+    return a.name.localeCompare(b.name);
+  });
   return <>
     <header className={styles.pageHeading}><div><h1>Directory</h1><p>Find Peer Advisers and Officers by Campus and Course.</p></div></header>
     {people.length === 0 && <p className={styles.panel}>There are no approved Peer Advisers yet.</p>}

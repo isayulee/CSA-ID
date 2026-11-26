@@ -1,5 +1,6 @@
 export const campuses = ["Intramuros", "Makati"];
-export const courses = [
+export type Course = { code: string; title: string };
+export const courses: Course[] = [
   { code: "CS210", title: "Data Structures" },
   { code: "PHYS141", title: "Classical Mechanics" },
   { code: "CHEM241", title: "Organic Chemistry" },
@@ -27,7 +28,7 @@ export type AdvisingRequest = {
 };
 export type Kit = { id: string; course: string; year: number; term: number; title: string; body: string; link: string; pdf: string; revision?: string };
 export type KitDraft = Kit & { author: string; base: string; state: "pending" | "approved" | "rejected"; note: string };
-export type PreviewState = { advisers: Adviser[]; requests: AdvisingRequest[]; kits: Kit[]; drafts: KitDraft[] };
+export type PreviewState = { addedCourses?: Course[]; advisers: Adviser[]; requests: AdvisingRequest[]; kits: Kit[]; drafts: KitDraft[] };
 export const peerId = "alex";
 export const candidates = [{ id: "sam", name: "Sam Rivera" }, { id: "mika", name: "Mika Tan" }];
 export const sampleDay = "2026-11-25";
