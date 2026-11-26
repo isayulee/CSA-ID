@@ -59,6 +59,8 @@ const timeExamples: TimeExample[] = [
   { dayText: "MWF", timeText: "1:00pm to 5:00pm", expected: { days: [MON, WED, FRI], hours: [13, 14, 15, 16] } },
   { dayText: "TTh", timeText: "1:00pm to 5:00pm", expected: { days: [TUE, THU], hours: [13, 14, 15, 16] } },
   { dayText: "tth, sat", timeText: "1:00pm to 5:00pm", expected: { days: [TUE, THU, SAT], hours: [13, 14, 15, 16] } },
+  { dayText: "Wednesday, can't on other days", timeText: "1-5pm", expected: { days: [WED], hours: [13, 14, 15, 16] } },
+  { dayText: "Thursday 9 a.m. onwards", timeText: "9-11am", expected: { days: [THU], hours: [9, 10] } },
   {
     dayText: "Mon-Fri",
     timeText: "1:00pm to 5:00pm",

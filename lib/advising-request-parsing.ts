@@ -36,10 +36,14 @@ function lookupName(names: readonly string[], word: string): number | null {
   return index === -1 ? null : index + 1;
 }
 
-/** The days one word names: a weekday name or abbreviation, or compact letters such as MWF. */
+/**
+ * The days one word names: a weekday name or abbreviation, or compact letters such as MWF.
+ * A lone letter is not a day, so the t in "can't" and the m in "a.m." name nothing.
+ */
 function wordDays(word: string): DayOfWeek[] {
   const named = lookupName(WEEKDAY_NAMES, word);
   if (named !== null) return [named as DayOfWeek];
+  if (word.length < 2) return [];
   const days: DayOfWeek[] = [];
   for (let i = 0; i < word.length; ) {
     const letters = word.startsWith("th", i) ? "th" : word[i];
