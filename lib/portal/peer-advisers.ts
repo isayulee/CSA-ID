@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, exists, inArray, ne } from "drizzle-orm";
+import { and, eq, exists, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isAdministrator, type Actor } from "@/lib/admin";
 import { adminAuditLog, advisingRequests, campuses, peerAdvisers, users } from "@/lib/db/schema";
@@ -100,6 +100,34 @@ export async function updatePeerAdviserCampus({ db, adminSubs }: PortalAdminDeps
     db.insert(adminAuditLog).select(db.select(auditColumns({ actorGoogleSub: actor.googleSub, action: "update_peer_adviser", targetType: "user", targetId: target.userId, targetLabel: `${target.email} · Campus: ${campus.name}` }))
       .from(peerAdvisers).where(changesCampus)),
     db.update(peerAdvisers).set({ campusId: campus.id }).where(changesCampus),
+  ]);
+  return OK;
+}
+
+export const officerInput = z.union([
+  z.object({ userId, officerPosition: z.string().trim().min(1).max(64), officerOrder: z.number().int().min(1).max(99) }),
+  z.object({ userId, officerPosition: z.null(), officerOrder: z.null() }),
+]);
+
+/**
+ * Sets or clears a Peer Adviser's Officer position and Directory order, with its
+ * audit entry in the same batch. Both are set together or cleared together, as
+ * the `peer_advisers` check requires. A request that changes nothing writes nothing.
+ */
+export async function updatePeerAdviserOfficer({ db, adminSubs }: PortalAdminDeps, actor: Actor, raw: unknown): Promise<PortalResult> {
+  if (!isAdministrator(actor, adminSubs)) return UNAUTHORIZED;
+  const parsed = officerInput.safeParse(raw);
+  if (!parsed.success) return portalFail(400, "Give an Officer position of 1 to 64 characters and a Directory order from 1 to 99, or clear both");
+  const { officerPosition, officerOrder } = parsed.data;
+  const target = await loadPeerAdviser(db, parsed.data.userId);
+  if (!target) return NOT_A_PEER_ADVISER;
+  const changesOfficer = and(peerAdviserRow(target.userId),
+    sql`(${peerAdvisers.officerPosition} is not ${officerPosition} or ${peerAdvisers.officerOrder} is not ${officerOrder})`);
+  const label = officerPosition === null ? "Officer position cleared" : `Officer: ${officerPosition} (#${officerOrder})`;
+  await db.batch([
+    db.insert(adminAuditLog).select(db.select(auditColumns({ actorGoogleSub: actor.googleSub, action: "update_peer_adviser", targetType: "user", targetId: target.userId, targetLabel: `${target.email} · ${label}` }))
+      .from(peerAdvisers).where(changesOfficer)),
+    db.update(peerAdvisers).set({ officerPosition, officerOrder }).where(changesOfficer),
   ]);
   return OK;
 }
