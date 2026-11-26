@@ -18,7 +18,8 @@ function sameOrigin(request: Request) {
   return origin !== null && origin === new URL(request.url).origin;
 }
 
-async function readCapped(request: Request, maxBytes: number) {
+/** The body as text, or null once it passes `maxBytes`; the declared length is checked before anything is read. */
+export async function readCapped(request: Request, maxBytes: number) {
   const declared = request.headers.get("content-length");
   if (declared !== null && Number(declared) > maxBytes) return null;
   if (!request.body) return "";
