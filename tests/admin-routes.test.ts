@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
-import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, users } from "@/lib/db/schema";
+import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, reservedSlugs, users } from "@/lib/db/schema";
 import { createTestDb } from "./helpers";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
@@ -25,8 +25,9 @@ const post = (path: string, body?: unknown, headers: Record<string, string> = { 
   new Request(`${ORIGIN}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
 
 async function seedUserWithProfile(id: string, status: "draft" | "published" | "suspended") {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test` });
-  await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug: id, displayName: id, evaluationUrl: "https://forms.example/e", status });
+  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test`, name: id });
+  await t.db.insert(reservedSlugs).values({ slug: id });
+  await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug: id, displayName: id, roleTitle: "Peer Adviser", evaluationUrl: "https://forms.example/e", status });
   const [user] = await t.db.select().from(users).where(eq(users.id, `u-${id}`));
   const [profile] = await t.db.select().from(profiles).where(eq(profiles.id, id));
   return { user, profile };
@@ -94,15 +95,15 @@ describe("administrator routes", () => {
   });
 
   it("let an Administrator remove a Profile's images and purge its cached public page", async () => {
-    await seedUserWithProfile("jo", "published");
-    await t.db.update(profiles).set({ avatarKey: "img/jo/a1" }).where(eq(profiles.id, "jo"));
+    await seedUserWithProfile("joy", "published");
+    await t.db.update(profiles).set({ avatarKey: "img/joy/a1" }).where(eq(profiles.id, "joy"));
     const deleted: string[] = [];
     state.bindings = { ...state.bindings, KV: { delete: async (key: string) => void deleted.push(key) } };
     const [admin] = await t.db.select().from(users).where(eq(users.id, "u-admin"));
     state.current = { user: admin, profile: null };
-    const response = await removeImages.POST(post("/api/admin/remove-images", { profileId: "jo", reason: "Offensive photo" }));
+    const response = await removeImages.POST(post("/api/admin/remove-images", { profileId: "joy", reason: "Offensive photo" }));
     expect(response.status).toBe(200);
-    expect(deleted).toEqual(["img/jo/a1"]);
-    expect(state.purged).toEqual(["jo"]);
+    expect(deleted).toEqual(["img/joy/a1"]);
+    expect(state.purged).toEqual(["joy"]);
   });
 });

@@ -4,6 +4,7 @@ import { draftSocialLinks, profiles, reservedSlugs } from "@/lib/db/schema";
 import { findOrCreateUser } from "@/lib/auth/users";
 import { createTestDb } from "./helpers";
 import { defaultAppearance, type ProfileAppearance } from "@/lib/profile-appearance";
+import { claimSlug } from "@/lib/profile-data";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
@@ -29,9 +30,10 @@ function req(method: string, path: string, body?: unknown, headers: Record<strin
   return new Request(`${ORIGIN}${path}`, { method, headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) });
 }
 
-const validProfile = (name: string) => ({ displayName: name, role: "Role", bio: "", accentColor: "#B5121B", evaluationUrl: "", links: [{ service: "github", url: `https://github.com/${name}` }] });
+const validProfile = (name: string) => ({ displayName: name, roleTitle: "Role", bio: "", accentColor: "#B5121B", evaluationUrl: "", links: [{ service: "github", url: `https://github.com/${name}` }] });
 
-type Body = { error: string; profile: { displayName: string; studentNumber: string | null; showStudentNumber: boolean; appearance: ProfileAppearance | null }; links: Array<{ url: string }> };
+type CardColumns = { [Column in keyof ProfileAppearance]: ProfileAppearance[Column] | null };
+type Body = { error: string; profile: CardColumns & { displayName: string; studentNumber: string | null; showStudentNumber: boolean }; links: Array<{ url: string }> };
 const json = async (res: Response) => (await res.json()) as Body;
 
 let profileRoute: typeof import("@/app/api/profile/route");
@@ -49,7 +51,7 @@ beforeEach(() => { current = A; });
 
 describe("profile isolation (#5)", () => {
   it("User A's GET and PUT only ever touch A's rows", async () => {
-    const appearance = { ...defaultAppearance, cardColor: "#183726", cardOpacity: 78, frosted: true };
+    const appearance = { ...defaultAppearance, cardColor: "#183726", cardOpacity: 78, cardFrosted: true };
     expect((await profileRoute.PUT(req("PUT", "/api/profile", { ...validProfile("alice"), studentNumber: "0012345678", showStudentNumber: true, appearance }))).status).toBe(200);
     current = B;
     expect((await profileRoute.PUT(req("PUT", "/api/profile", validProfile("bob")))).status).toBe(200);
@@ -59,7 +61,7 @@ describe("profile isolation (#5)", () => {
     expect(a.profile.displayName).toBe("alice");
     expect(a.profile.studentNumber).toBe("0012345678");
     expect(a.profile.showStudentNumber).toBe(true);
-    expect(a.profile.appearance).toEqual(appearance);
+    expect(a.profile).toMatchObject(appearance);
     expect(a.links.map((l) => l.url)).toEqual(["https://github.com/alice"]);
 
     current = B;
@@ -67,7 +69,7 @@ describe("profile isolation (#5)", () => {
     expect(b.profile.displayName).toBe("bob");
     expect(b.profile.studentNumber).toBeNull();
     expect(b.profile.showStudentNumber).toBe(false);
-    expect(b.profile.appearance).toBeNull();
+    expect(b.profile).toMatchObject({ iconColor: null, cardColor: null, cardOpacity: null, cardFrosted: null });
     expect(b.links.map((l) => l.url)).toEqual(["https://github.com/bob"]);
   });
 
@@ -99,7 +101,8 @@ it("changes student number visibility only on publish and keeps CSA prefill avai
   const adviser = { user: { id: "" }, profile: { id: "" } };
   await makeAccount("visibility-adviser", adviser);
   const slug = "visibility-adviser";
-  await t.db.update(profiles).set({ slug, studentNumber: "0012345678" }).where(eq(profiles.id, adviser.profile.id));
+  expect(await claimSlug(t.db, adviser.user.id, slug)).toMatchObject({ ok: true });
+  await t.db.update(profiles).set({ roleTitle: "Peer Adviser", studentNumber: "0012345678" }).where(eq(profiles.id, adviser.profile.id));
   const publish = await import("@/app/api/profile/publish/route");
   async function publishDraft() {
     const [profile] = await t.db.select().from(profiles).where(eq(profiles.id, adviser.profile.id));
@@ -146,14 +149,19 @@ describe("mutation guard", () => {
     expect(res.status).toBe(400);
     expect((await json(res)).error).toMatch(/official HTTPS/);
   });
+
+  it("refuses an evaluation form address that is not HTTPS", async () => {
+    const res = await profileRoute.PUT(req("PUT", "/api/profile", { ...validProfile("alice"), evaluationUrl: "http://forms.example/evaluation" }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toBe("Use an HTTPS address for the evaluation form");
+  });
 });
 
 describe("slug claim (#6)", () => {
   it("reserves the slug in the same batch as the claim", async () => {
     current = B;
     expect((await slugRoute.POST(req("POST", "/api/profile/slug", { slug: "Bob-Id" }))).status).toBe(200);
-    const [reserved] = await t.db.select().from(reservedSlugs).where(eq(reservedSlugs.slug, "bob-id"));
-    expect(reserved.profileId).toBe(B.profile.id);
+    expect(await t.db.select().from(reservedSlugs).where(eq(reservedSlugs.slug, "bob-id"))).toHaveLength(1);
     const [b] = await t.db.select().from(profiles).where(eq(profiles.id, B.profile.id));
     expect(b.slug).toBe("bob-id");
   });
@@ -212,7 +220,8 @@ it("reads unpublished changes only for the owning User", async () => {
   const publish = await import("@/app/api/profile/publish/route");
 
   for (const [account, slug] of [[first, "editor-first"], [second, "editor-second"]] as const) {
-    await t.db.update(profiles).set({ slug, role: "Peer Adviser", evaluationUrl: "https://example.test/evaluation" }).where(eq(profiles.id, account.profile.id));
+    expect(await claimSlug(t.db, account.user.id, slug)).toMatchObject({ ok: true });
+    await t.db.update(profiles).set({ roleTitle: "Peer Adviser", evaluationUrl: "https://example.test/evaluation" }).where(eq(profiles.id, account.profile.id));
     const [profile] = await t.db.select().from(profiles).where(eq(profiles.id, account.profile.id));
     current = { user: account.user, profile };
     expect((await publish.POST(req("POST", "/api/profile/publish"))).status).toBe(200);

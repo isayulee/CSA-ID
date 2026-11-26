@@ -8,8 +8,10 @@ import { createTestDb } from "./helpers";
 let t: Awaited<ReturnType<typeof createTestDb>>;
 
 async function seed(id: string, values: Partial<Profile> = {}) {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test` });
-  const [profile] = await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug: id, displayName: id, role: "Peer Adviser", evaluationUrl: "https://forms.example/e", ...values }).returning();
+  const slug = values.slug === undefined ? id : values.slug;
+  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test`, name: id });
+  if (slug) await t.db.insert(reservedSlugs).values({ slug });
+  const [profile] = await t.db.insert(profiles).values({ id, userId: `u-${id}`, displayName: id, roleTitle: "Peer Adviser", evaluationUrl: "https://forms.example/e", ...values, slug }).returning();
   return profile;
 }
 
@@ -20,8 +22,9 @@ beforeAll(async () => { t = await createTestDb(); });
 afterAll(() => t.dispose());
 
 describe("publish", () => {
-  it("copies the Draft Profile and its Draft Social Links into the Published Profile and reserves the Slug", async () => {
-    const profile = await seed("ana", { bio: "Hello", studentNumber: "2020123456" });
+  it("copies the Draft Profile, its card style and its Draft Social Links into the Published Profile", async () => {
+    const cardStyle = { iconColor: "#112233", cardColor: "#F0F0F0", cardOpacity: 80, cardFrosted: true };
+    const profile = await seed("ana", { bio: "Hello", studentNumber: "2020123456", ...cardStyle });
     await t.db.insert(draftSocialLinks).values([
       { id: "ana-2", profileId: "ana", service: "website", url: "https://ana.example", displayOrder: 1 },
       { id: "ana-1", profileId: "ana", service: "github", url: "https://github.com/ana", displayOrder: 0 },
@@ -31,9 +34,8 @@ describe("publish", () => {
 
     expect(await statusOf("ana")).toBe("published");
     const published = await loadPublishedProfile(t.db, "ana");
-    expect(published).toMatchObject({ displayName: "ana", role: "Peer Adviser", bio: "Hello", evaluationUrl: "https://forms.example/e", studentNumber: null });
+    expect(published).toMatchObject({ displayName: "ana", roleTitle: "Peer Adviser", bio: "Hello", evaluationUrl: "https://forms.example/e", studentNumber: null, ...cardStyle });
     expect(published?.links).toEqual([{ service: "github", url: "https://github.com/ana" }, { service: "website", url: "https://ana.example" }]);
-    expect(await t.db.select().from(reservedSlugs).where(eq(reservedSlugs.slug, "ana"))).toMatchObject([{ profileId: "ana" }]);
   });
 
   it("replaces the previous Published Profile on a second publish", async () => {
@@ -49,7 +51,7 @@ describe("publish", () => {
   it("refuses a Profile without a Slug, name or role, and publishes nothing", async () => {
     const profile = await seed("noslug", { slug: null });
     expect(await publish(t.db, profile)).toEqual({ ok: false, status: 400, error: "Add a permanent address, name, and role before publishing" });
-    expect(await publish(t.db, { ...profile, slug: "noslug", role: "" })).toMatchObject({ ok: false, status: 400 });
+    expect(await publish(t.db, { ...profile, slug: "noslug", roleTitle: "" })).toMatchObject({ ok: false, status: 400 });
     expect(await snapshotOf("noslug")).toBeUndefined();
     expect(await statusOf("noslug")).toBe("draft");
   });
@@ -65,14 +67,6 @@ describe("publish", () => {
     const profile = await seed("banned", { status: "suspended" });
     expect(await publish(t.db, profile)).toEqual({ ok: false, status: 403, error: "This profile is suspended" });
     expect(await snapshotOf("banned")).toBeUndefined();
-  });
-
-  it("refuses a Slug another Profile has reserved", async () => {
-    await seed("owner", { slug: null });
-    await t.db.insert(reservedSlugs).values({ slug: "taken", profileId: "owner", createdAt: 0 });
-    const profile = await seed("late", { slug: "taken" });
-    expect(await publish(t.db, profile)).toEqual({ ok: false, status: 409, error: "That permanent profile address is already taken" });
-    expect(await snapshotOf("late")).toBeUndefined();
   });
 
   it("keeps a Profile suspended when an Administrator suspends it while the publish is under way", async () => {

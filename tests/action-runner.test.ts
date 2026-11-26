@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { profiles, publishedProfiles, users } from "@/lib/db/schema";
+import { profiles, publishedProfiles, reservedSlugs, users } from "@/lib/db/schema";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { createTestDb } from "./helpers";
 
@@ -35,8 +35,9 @@ const send = (method: string, path: string, body?: unknown) =>
   new Request(`${ORIGIN}${path}`, { method, headers: { origin: ORIGIN, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 
 async function signIn(id: string, values: Partial<typeof profiles.$inferInsert> = {}) {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test` });
-  await t.db.insert(profiles).values({ id, userId: `u-${id}`, displayName: id, role: "Peer Adviser", evaluationUrl: "https://forms.example/e", ...values });
+  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test`, name: id });
+  if (typeof values.slug === "string") await t.db.insert(reservedSlugs).values({ slug: values.slug });
+  await t.db.insert(profiles).values({ id, userId: `u-${id}`, displayName: id, roleTitle: "Peer Adviser", evaluationUrl: "https://forms.example/e", ...values });
   const [user] = await t.db.select().from(users).where(eq(users.id, `u-${id}`));
   const [row] = await t.db.select().from(profiles).where(eq(profiles.id, id));
   state.current = { user, profile: row };
@@ -86,7 +87,7 @@ describe("which cached public page each mutation clears", () => {
     await signIn("cal");
     const claim = await slug.POST(send("POST", "/api/profile/slug", { slug: "cal-id" }));
     expect(await claim.json()).toEqual({ ok: true, slug: "cal-id" });
-    const save = await profile.PUT(send("PUT", "/api/profile", { displayName: "Cal", role: "Role", bio: "", accentColor: "#B5121B", evaluationUrl: "", links: [] }));
+    const save = await profile.PUT(send("PUT", "/api/profile", { displayName: "Cal", roleTitle: "Role", bio: "", accentColor: "#B5121B", evaluationUrl: "", links: [] }));
     expect(save.status).toBe(200);
     expect(state.purged).toEqual([]);
   });
@@ -127,7 +128,7 @@ describe("a failed clear never fails a committed write", () => {
 
   it("an Administrator suspension still answers 200", async () => {
     await signIn("fas", { slug: "fas", status: "published" });
-    await t.db.insert(users).values({ id: "u-admin", googleSub: "sub-admin", email: "admin@example.test" });
+    await t.db.insert(users).values({ id: "u-admin", googleSub: "sub-admin", email: "admin@example.test", name: "Administrator" });
     const [admin] = await t.db.select().from(users).where(eq(users.id, "u-admin"));
     state.current = { user: admin, profile: null };
     state.purgeFails = true;

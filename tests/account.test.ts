@@ -32,7 +32,7 @@ async function seed(name: "alice" | "bob") {
   await t.db.insert(draftSocialLinks).values({ id: crypto.randomUUID(), profileId: profile, service: "github", url: `https://github.com/${name}`, displayOrder: 0 });
   const claimed = await claimSlug(t.db, user.id, `${name}-id`);
   expect(claimed.ok).toBe(true);
-  await t.db.insert(publishedProfiles).values({ profileId: profile, slug: `${name}-id`, displayName: name, role: "r", bio: "", accentColor: "#B5121B", avatarKey: oldAvatar, evaluationUrl: "https://forms.example/e" });
+  await t.db.insert(publishedProfiles).values({ profileId: profile, slug: `${name}-id`, displayName: name, roleTitle: "r", bio: "", accentColor: "#B5121B", avatarKey: oldAvatar, evaluationUrl: "https://forms.example/e" });
   await t.db.insert(publishedSocialLinks).values({ id: crypto.randomUUID(), profileId: profile, service: "github", url: `https://github.com/${name}`, displayOrder: 0 });
   for (const key of [avatar, bg, oldAvatar]) await kv.put(key, "img");
   const token = await createSession(t.db, user.id);
