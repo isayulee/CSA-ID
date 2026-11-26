@@ -3,7 +3,7 @@ import { getCurrentAccount } from "@/lib/auth/current-user";
 import { getDb } from "@/lib/db";
 import { readDraft, saveDraft } from "@/lib/profile-data";
 import { isSafeProfileUrl, profileInput } from "@/lib/profile-validation";
-import { guardMutation } from "@/lib/http/mutation-guard";
+import { runMutation } from "@/lib/http/action-runner";
 
 export async function GET() {
   const account = await getCurrentAccount();
@@ -14,12 +14,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const guard = await guardMutation(request, getCurrentAccount);
-  if (!guard.ok) return guard.response;
-  const parsed = profileInput.safeParse(guard.body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid profile" }, { status: 400 });
-  if (parsed.data.links.some((link) => !isSafeProfileUrl(link.service, link.url))) return NextResponse.json({ error: "Use the official HTTPS address for each social platform" }, { status: 400 });
-  const saved = await saveDraft(getDb(), guard.account.user.id, parsed.data);
-  if (!saved) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  return runMutation(request, getCurrentAccount, async ({ user }, body) => {
+    const parsed = profileInput.safeParse(body);
+    if (!parsed.success) return { status: 400, body: { error: parsed.error.issues[0]?.message || "Invalid profile" } };
+    if (parsed.data.links.some((link) => !isSafeProfileUrl(link.service, link.url))) return { status: 400, body: { error: "Use the official HTTPS address for each social platform" } };
+    const saved = await saveDraft(getDb(), user.id, parsed.data);
+    if (!saved) return { status: 404, body: { error: "Profile not found" } };
+    return { body: { ok: true } };
+  });
 }

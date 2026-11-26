@@ -2,6 +2,7 @@ export const DEFAULT_MAX_BODY_BYTES = 16 * 1024;
 
 type Failure = { ok: false; response: Response };
 type Success<A> = { ok: true; account: A; body: unknown };
+export type GuardOptions = { maxBytes?: number; body?: boolean };
 
 function fail(error: string, status: number): Failure {
   return { ok: false, response: Response.json({ error }, { status }) };
@@ -46,7 +47,7 @@ async function readCapped(request: Request, maxBytes: number) {
 export async function guardMutation<A>(
   request: Request,
   getAccount: () => Promise<A | null>,
-  options: { maxBytes?: number; body?: boolean } = {},
+  options: GuardOptions = {},
 ): Promise<Success<A> | Failure> {
   if (!sameOrigin(request)) return fail("Invalid origin", 403);
   const account = await getAccount();
