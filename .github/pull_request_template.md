@@ -2,6 +2,11 @@ Closes #
 
 <!-- Pull requests target `main`. Merging deploys the live site. -->
 
+## Problem
+
+<!-- The problem this pull request solves and who has it, in one or two plain sentences, before any word about the change.
+     Example: "A student assistant who changes their photo still sees the old one on their Published Profile for an hour." -->
+
 ## Summary
 
 <!-- What changed and why, in a few sentences. Use the terms in GLOSSARY.md. -->
