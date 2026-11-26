@@ -21,6 +21,7 @@ export const hours = Array.from({ length: 9 }, (_, i) => i + 8);
 export type Adviser = { id: string; name: string; campus: string; position: string; order: number; courses: string[]; slots: string[] };
 export type AdvisingRequest = {
   id: string; course: string; campus: string; topic: string; status: RequestStatus;
+  sheet: "schedule" | "plan-ahead";
   claimant: string; date: string; time: string; slots: string[];
   advisee: string; email: string; notes: string[];
 };
@@ -38,10 +39,10 @@ const seed: PreviewState = {
     { id: "toni", name: "Toni Cruz", campus: "Makati", position: "", order: 0, courses: ["PHYS141", "MATH146"], slots: ["1-13"] },
   ],
   requests: [
-    { id: "search-trees", course: "CS210", campus: "Intramuros", topic: "Binary search trees and AVL balancing", status: "pending", claimant: peerId, date: sampleDay, time: "14:00", slots: ["2-14"], advisee: "Avery Reyes", email: "avery@example.test", notes: [] },
-    { id: "graphs", course: "CS210", campus: "Intramuros", topic: "Graph traversal and shortest paths", status: "pending", claimant: "", date: "", time: "", slots: ["3-14", "3-15"], advisee: "Casey Ramos", email: "casey@example.test", notes: [] },
-    { id: "rotations", course: "PHYS141", campus: "Makati", topic: "Rotational dynamics and torque", status: "rescheduled", claimant: "toni", date: "2026-11-27", time: "13:00", slots: ["1-13"], advisee: "Dani Lim", email: "dani@example.test", notes: ["Review the practice set first."] },
-    { id: "reactions", course: "CHEM241", campus: "Intramuros", topic: "Reaction mechanisms and synthesis", status: "pending", claimant: "", date: "", time: "", slots: [], advisee: "Jules Yu", email: "jules@example.test", notes: [] },
+    { id: "search-trees", sheet: "schedule", course: "CS210", campus: "Intramuros", topic: "Binary search trees and AVL balancing", status: "pending", claimant: peerId, date: sampleDay, time: "14:00", slots: ["2-14"], advisee: "Avery Reyes", email: "avery@example.test", notes: [] },
+    { id: "graphs", sheet: "plan-ahead", course: "CS210", campus: "Intramuros", topic: "Graph traversal and shortest paths", status: "pending", claimant: "", date: "", time: "", slots: ["3-14", "3-15"], advisee: "Casey Ramos", email: "casey@example.test", notes: [] },
+    { id: "rotations", sheet: "schedule", course: "PHYS141", campus: "Makati", topic: "Rotational dynamics and torque", status: "rescheduled", claimant: "toni", date: "2026-11-27", time: "13:00", slots: ["1-13"], advisee: "Dani Lim", email: "dani@example.test", notes: ["Review the practice set first."] },
+    { id: "reactions", sheet: "plan-ahead", course: "CHEM241", campus: "Intramuros", topic: "Reaction mechanisms and synthesis", status: "pending", claimant: "", date: "", time: "", slots: [], advisee: "Jules Yu", email: "jules@example.test", notes: [] },
   ],
   kits: [
     { id: "cs", course: "CS210", year: 2026, term: 1, title: "Binary Search Trees & AVL Balancing", body: "Draw the tree after inserting each key. Then identify the first unbalanced node and explain which rotation restores balance.", link: "", pdf: "" },
@@ -63,11 +64,22 @@ export function subscribe(listener: () => void) {
 }
 export function getSeed() { return seed; }
 
+function restorePreview(raw: string): PreviewState {
+  const restored = JSON.parse(raw) as PreviewState;
+  return {
+    ...restored,
+    requests: restored.requests.map((request) => request.sheet ? request : {
+      ...request,
+      sheet: seed.requests.find((sample) => sample.id === request.id)?.sheet ?? "plan-ahead",
+    }),
+  };
+}
+
 export function getPreview() {
   try {
     const raw = sessionStorage.getItem(storageKey);
     if (raw !== cachedJson) {
-      cachedState = raw ? JSON.parse(raw) as PreviewState : seed;
+      cachedState = raw ? restorePreview(raw) : seed;
       cachedJson = raw;
     }
   } catch {

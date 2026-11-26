@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { AvailabilityGrid } from "./people";
 import { campuses, courses, matching, peerId, sampleDay, statuses, updatePreview, weekdays, type AdvisingRequest, type PreviewState, type RequestStatus } from "./model";
 import styles from "./portal.module.css";
@@ -114,8 +114,59 @@ function RequestCard({ request, state, administrator, expanded }: { request: Adv
   );
 }
 
+function RequestSheet({ view, requests, state, requestId }: {
+  view: "Sheet View" | "Plan Ahead";
+  requests: AdvisingRequest[];
+  state: PreviewState;
+  requestId: string;
+}) {
+  const [selectedId, setSelectedId] = useState(requestId);
+  const focusDetails = useCallback((element: HTMLElement | null) => element?.focus(), []);
+  const selected = requests.find((request) => request.id === selectedId);
+
+  return (
+    <section className={styles.stack} aria-labelledby="schedule-sheet-heading">
+      <h2 id="schedule-sheet-heading">{view}</h2>
+      <div className={`${styles.tableRegion} ${styles.scheduleSheet}`} tabIndex={0} role="region" aria-label={`${view} Advising Requests`}>
+        <table className={styles.table}>
+          <thead><tr>
+            <th scope="col">Date</th><th scope="col">Time</th><th scope="col">Session</th><th scope="col">Campus</th>
+            <th scope="col">{view === "Plan Ahead" ? "Status" : "Peer Adviser"}</th>
+          </tr></thead>
+          <tbody>{requests.map((request) => {
+            const canSeeSession = !request.claimant || request.claimant === peerId;
+            const adviser = state.advisers.find((person) => person.id === request.claimant);
+            const title = canSeeSession ? request.topic || request.course : request.course;
+            const isSelected = selected?.id === request.id;
+            return <tr key={request.id}>
+              <td>{canSeeSession ? request.date || "To be set" : "—"}</td>
+              <td>{canSeeSession ? request.time || "—" : "—"}</td>
+              <th scope="row">
+                <button className={styles.sheetRequest} type="button" aria-expanded={isSelected} aria-controls={isSelected ? "schedule-request-details" : undefined} onClick={() => setSelectedId(isSelected ? "" : request.id)}>
+                  {title}
+                </button>
+                {title !== request.course && <small className={styles.sheetCourse}>{request.course}</small>}
+              </th>
+              <td>{request.campus}</td>
+              <td>{view === "Plan Ahead"
+                ? <span className={styles.badge} data-status={request.status}>{statuses[request.status]}</span>
+                : adviser?.name ?? (request.claimant ? "Previously assigned" : "Unclaimed")}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      {selected && <section id="schedule-request-details" aria-label="Selected Advising Request" key={selected.id} ref={focusDetails} tabIndex={-1}>
+        <RequestCard request={selected} state={state} administrator={false} expanded />
+      </section>}
+    </section>
+  );
+}
+
 export function Scheduler({ state, administrator, requestId }: { state: PreviewState; administrator: boolean; requestId: string }) {
-  const [view, setView] = useState<(typeof views)[number]>(requestId || administrator ? "Plan Ahead" : "Sessions Today");
+  const [view, setView] = useState<(typeof views)[number]>(() => {
+    if (!requestId) return "Sessions Today";
+    return state.requests.find((request) => request.id === requestId)?.sheet === "plan-ahead" ? "Plan Ahead" : "Sheet View";
+  });
   const [course, setCourse] = useState("");
   const [campus, setCampus] = useState("");
   const [status, setStatus] = useState("");
@@ -123,8 +174,8 @@ export function Scheduler({ state, administrator, requestId }: { state: PreviewS
   const requests = state.requests.filter((request) =>
     (!course || request.course === course) && (!campus || request.campus === campus) &&
     (!status || request.status === status) && (!claimant || request.claimant === (claimant === "unclaimed" ? "" : claimant)) &&
-    (view === "Plan Ahead" || (view === "Sheet View" && Boolean(request.date)) ||
-      (view === "Sessions Today" && request.date === sampleDay && (administrator || request.claimant === peerId)))
+    (administrator || (view === "Plan Ahead" ? request.sheet === "plan-ahead" :
+      request.sheet === "schedule" && (view === "Sheet View" || (request.date === sampleDay && request.claimant === peerId))))
   );
 
   return <>
@@ -135,18 +186,14 @@ export function Scheduler({ state, administrator, requestId }: { state: PreviewS
     {!administrator && <div className={styles.tabs} aria-label="Scheduler views">
       {views.map((item) => <button type="button" key={item} aria-pressed={view === item} onClick={() => setView(item)}>{item}</button>)}
     </div>}
-    <div className={styles.filters} aria-label="Advising Request filters">
+    <div className={`${styles.filters} ${styles.schedulerFilters}`} aria-label="Advising Request filters">
       <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{courses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
       <label className={styles.field}>Campus<select value={campus} onChange={(e) => setCampus(e.target.value)}><option value="">All Campuses</option>{campuses.map((item) => <option key={item}>{item}</option>)}</select></label>
       <label className={styles.field}>Status<select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{statusEntries.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
       <label className={styles.field}>Claimant<select value={claimant} onChange={(e) => setClaimant(e.target.value)}><option value="">Anyone</option><option value="unclaimed">Unclaimed</option>{state.advisers.map((item) => <option key={item.id} value={item.id}>{!administrator && item.id === peerId ? "My Advising Requests" : item.name}</option>)}</select></label>
     </div>
-    {requests.length === 0 ? <p className={styles.panel} role="status">No Advising Requests match this view.</p> : view === "Sheet View" ? (
-      <div className={styles.tableRegion} tabIndex={0} role="region" aria-label="Schedule sheet">
-        <table className={styles.table}><thead><tr><th>Date</th><th>Time</th><th>Course</th><th>Campus</th><th>Status</th></tr></thead>
-          <tbody>{requests.map((request) => <tr key={request.id}><td>{administrator || request.claimant === peerId ? request.date : "—"}</td><td>{administrator || request.claimant === peerId ? request.time : "—"}</td><td>{request.course}</td><td>{request.campus}</td><td>{statuses[request.status]}</td></tr>)}</tbody>
-        </table>
-      </div>
+    {requests.length === 0 ? <p className={styles.panel} role="status">No Advising Requests match this view.</p> : !administrator && view !== "Sessions Today" ? (
+      <RequestSheet key={view} view={view} requests={requests} state={state} requestId={requestId} />
     ) : <div className={styles.stack}>{requests.map((request) => <RequestCard key={request.id} request={request} state={state} administrator={administrator} expanded={requestId === request.id} />)}</div>}
   </>;
 }

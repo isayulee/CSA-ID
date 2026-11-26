@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <Brand />
         <div>
           <h1>Sign in to Digital Profile</h1>
-          <p>Edit and preview your Draft Profile. Visitors can see only the details you publish. Approved Peer Advisers and Administrators can also open the private Portal.</p>
+          <p>Edit and preview your Draft Profile. Visitors can see only the details you publish. The private Portal is in development for approved Peer Advisers and Administrators.</p>
         </div>
         <Link className="googleButton" href="/login/google"><span aria-hidden="true">G</span>Continue with Google</Link>
         {process.env.NODE_ENV === "development" && <Link className="textLink localDemoLink" href="/login/demo">Use local development account</Link>}

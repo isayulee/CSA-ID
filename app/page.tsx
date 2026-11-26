@@ -19,7 +19,7 @@ export default function Home() {
               </div>
               <p className="heroFact">Peer Advisers and Administrators use the same Google sign-in.</p>
             </div>
-            <div className="heroVisual" aria-label="Draft Profile and mobile preview">
+            <div className="heroVisual" aria-hidden="true">
               <MapuaSquares className="heroSquares" />
               <div className="editorWindow">
                 <div className="windowBar"><span /><span /><span /><b>Profile editor</b></div>
@@ -42,10 +42,10 @@ export default function Home() {
           <div className="shell mechanismGrid">
             <div>
               <h2>Prepare for your next session</h2>
-              <p>In the private Portal, approved Peer Advisers can find Teaching Kits and coordinate Advising Requests. Administrators use it to review approvals and oversee advising.</p>
+              <p>The private Portal is in development. It will give approved Peer Advisers a place to find Teaching Kits and coordinate Advising Requests.</p>
             </div>
             <ol className="stepList">
-              <li><span>01</span><div><h3>Sign in with Google</h3><p>Open your Draft Profile and, if you’re an approved Peer Adviser, the Portal.</p></div></li>
+              <li><span>01</span><div><h3>Sign in with Google</h3><p>Open your Draft Profile. Administrators can sign in the same way to review Abuse Reports.</p></div></li>
               <li><span>02</span><div><h3>Add session details</h3><p>Choose your photo, links, background, and evaluation form.</p></div></li>
               <li><span>03</span><div><h3>Publish your Profile</h3><p>Share the permanent URL on your NFC Card. You can publish updates to the same URL.</p></div></li>
             </ol>

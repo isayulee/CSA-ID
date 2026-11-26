@@ -11,7 +11,14 @@ const REASON_LABELS: Record<string, string> = {
 
 type Action = "suspend" | "remove-images";
 
+const reportDateTime = new Intl.DateTimeFormat("en-PH", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Manila",
+});
+
 function ReportRow({ report }: { report: OpenReport }) {
+  const createdAt = new Date(report.createdAt * 1000);
   const resultRef = useRef<HTMLParagraphElement>(null);
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [reason, setReason] = useState("");
@@ -42,7 +49,7 @@ function ReportRow({ report }: { report: OpenReport }) {
     <li className="adminReport">
       <div className="adminReportHead">
         <strong>{REASON_LABELS[report.reason] ?? report.reason}</strong>
-        <time dateTime={new Date(report.createdAt * 1000).toISOString()}>{new Date(report.createdAt * 1000).toLocaleString()}</time>
+        <time dateTime={createdAt.toISOString()}>{reportDateTime.format(createdAt)}</time>
       </div>
       <p className="adminReportProfile">
         {report.profileId

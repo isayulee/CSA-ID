@@ -42,7 +42,7 @@ export function ProfileCard({
             {socialLinks.map(({ service, label }) => <span key={service}><SocialIcon platform={service} />{label}</span>)}
           </div>
         ) : <div className="profileLinks" aria-label="Profile links"><span>LinkedIn</span><span>Facebook</span><span>Instagram</span></div>}
-        <button className="saveContact" type="button">Open evaluation form</button>
+        <span className="saveContact previewEvaluation" aria-hidden="true">Open evaluation form</span>
       </div>
     </article>
   );
