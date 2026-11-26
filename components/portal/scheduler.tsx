@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useState, type FormEvent } from "react";
-import { rankPeerAdvisers, type HourSlot, type NoSuggestionReason } from "@/lib/matching";
+import type { HourSlot } from "@/lib/advising-slots";
+import { rankPeerAdvisers, type NoSuggestionReason } from "@/lib/matching";
 import { AvailabilityGrid } from "./people";
 import { campuses, courses, peerId, sampleDay, statuses, updatePreview, weekdays, type AdvisingRequest, type PreviewState, type RequestStatus } from "./model";
 import styles from "./portal.module.css";
