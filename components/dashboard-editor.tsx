@@ -3,17 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Brand } from "./brand";
 import { ProfileCard } from "./profile-card";
 import { SocialIcon } from "./social-icon";
+import styles from "./portal/portal.module.css";
 import { defaultAppearance, type ProfileAppearance } from "@/lib/profile-appearance";
 import { isCsaEvaluationForm } from "@/lib/evaluation-form";
 import { services, type ProfileService } from "@/lib/profile-validation";
 
-const sections = ["Profile", "Appearance", "Links"] as const;
+const sections = ["Details", "Appearance", "Links"] as const;
 const labels: Record<ProfileService, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", github: "GitHub", youtube: "YouTube", tiktok: "TikTok", x: "X", website: "Website" };
 
+async function profileMutation(path: string, options: RequestInit) {
+  try {
+    const response = await fetch(path, options);
+    const result = await response.json().catch(() => ({})) as { error?: string; slug?: string };
+    return { ok: response.ok, ...result };
+  } catch {
+    return { ok: false, error: "Check your connection and try again.", slug: undefined };
+  }
+}
+
 export type DashboardData = {
+  hasUnpublishedChanges: boolean;
+  canReviewReports: boolean;
+  profileOrigin: string;
   user: { name: string; email: string };
   profile: { displayName: string; role: string; bio: string; slug: string | null; accentColor: string; appearance: ProfileAppearance | null; evaluationUrl: string | null; studentNumber: string | null; showStudentNumber: boolean; status: string; avatarKey: string | null; backgroundKey: string | null };
   links: Array<{ service: string; url: string }>;
@@ -21,12 +34,15 @@ export type DashboardData = {
 
 export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const router = useRouter();
-  const [section, setSection] = useState<(typeof sections)[number]>("Profile");
+  const permanentUrlInput = useRef<HTMLInputElement>(null);
+  const [copyNotice, setCopyNotice] = useState("");
+  const [section, setSection] = useState<(typeof sections)[number]>("Details");
   const [name, setName] = useState(initial.profile.displayName);
   const [role, setRole] = useState(initial.profile.role);
   const [bio, setBio] = useState(initial.profile.bio);
   const [slug, setSlug] = useState(initial.profile.slug || "");
   const [claimedSlug, setClaimedSlug] = useState(initial.profile.slug);
+  const permanentUrl = claimedSlug ? `${initial.profileOrigin}/id/${claimedSlug}` : "";
   const [slugError, setSlugError] = useState("");
   const [color, setColor] = useState(initial.profile.accentColor);
   const [colorText, setColorText] = useState(initial.profile.accentColor);
@@ -45,59 +61,56 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const avatarInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
 
-  const userDisplayName = (initial.user.name && initial.user.name.trim().length > 0 && initial.user.name !== initial.user.email)
-    ? initial.user.name
-    : initial.user.email.split("@")[0];
-
-  const userInitials = (
-    userDisplayName
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join("") || initial.user.email.slice(0, 2)
-  ).toUpperCase();
-
   const payload = () => ({ displayName: name, role, bio, accentColor: color, appearance, evaluationUrl, studentNumber, showStudentNumber, links });
+
+  async function copyPermanentUrl() {
+    try {
+      await navigator.clipboard.writeText(permanentUrl);
+      setCopyNotice("Permanent URL copied.");
+    } catch {
+      permanentUrlInput.current?.focus();
+      permanentUrlInput.current?.select();
+      setCopyNotice("The URL is selected. Use your device’s Copy command.");
+    }
+  }
 
   async function save(showNotice = true) {
     setBusy(true); if (showNotice) setNotice("Saving draft…");
-    const response = await fetch("/api/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload()) });
-    const result = await response.json() as { error?: string };
+    const result = await profileMutation("/api/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload()) });
     setBusy(false);
-    if (!response.ok) { setNotice(result.error || "Draft could not be saved"); return false; }
-    if (showNotice) setNotice("Draft saved");
+    if (!result.ok) { setNotice(result.error || "Draft could not be saved"); return false; }
+    if (showNotice) { setNotice("Draft saved"); router.refresh(); }
     return true;
   }
 
   async function claim() {
     setBusy(true); setSlugError("");
-    const response = await fetch("/api/profile/slug", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug }) });
-    const result = await response.json() as { error?: string; slug?: string };
+    const result = await profileMutation("/api/profile/slug", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug }) });
     setBusy(false);
-    if (!response.ok || !result.slug) return setSlugError(result.error || "Address could not be claimed");
+    if (!result.ok || !result.slug) return setSlugError(result.error || "Address could not be claimed");
     setClaimedSlug(result.slug); setSlug(result.slug); setNotice("Permanent address claimed");
   }
 
   async function publish() {
     if (!(await save(false))) return;
     setBusy(true); setNotice("Publishing profile…");
-    const response = await fetch("/api/profile/publish", { method: "POST" });
-    const result = await response.json() as { error?: string; slug?: string };
+    const result = await profileMutation("/api/profile/publish", { method: "POST" });
     setBusy(false);
-    if (!response.ok) return setNotice(result.error || "Profile could not be published");
+    if (!result.ok) return setNotice(result.error || "Profile could not be published");
     setNotice("Profile published");
     setStatus("published");
+    router.refresh();
     if (result.slug) { setSlug(result.slug); setClaimedSlug(result.slug); }
   }
 
   async function unpublish() {
     setBusy(true); setNotice("Unpublishing profile…");
-    const response = await fetch("/api/profile/unpublish", { method: "POST" });
+    const result = await profileMutation("/api/profile/unpublish", { method: "POST" });
     setBusy(false);
-    if (!response.ok) return setNotice("Profile could not be unpublished");
+    if (!result.ok) return setNotice(result.error || "Profile could not be unpublished");
     setNotice("Profile unpublished");
     setStatus("draft");
+    router.refresh();
   }
 
   async function upload(kind: "avatar" | "background", input: HTMLInputElement) {
@@ -113,13 +126,14 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
     if (!response.ok) return setNotice(result.error || "Upload failed");
     if (result.url) (kind === "avatar" ? setAvatarUrl : setBackgroundUrl)(result.url);
     setNotice(`${kind === "avatar" ? "Photo" : "Background"} uploaded`);
+    router.refresh();
   }
 
   async function deleteAccount() {
     if (!window.confirm("Delete your account? This removes your profile and images and cannot be undone. Your profile address stays reserved.")) return;
     setBusy(true); setNotice("Deleting account…");
-    const response = await fetch("/api/account", { method: "DELETE" });
-    if (!response.ok) { setBusy(false); const result = await response.json().catch(() => ({})) as { error?: string }; return setNotice(result.error || "Account could not be deleted"); }
+    const result = await profileMutation("/api/account", { method: "DELETE" });
+    if (!result.ok) { setBusy(false); return setNotice(result.error || "Account could not be deleted"); }
     router.push("/");
   }
 
@@ -129,72 +143,27 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   }
 
   return (
-    <main className="dashboard">
-      <header className="dashboardHeader">
-        <Brand />
-        <details className="dashboardAccountMenu">
-          <summary aria-label="Open account menu" title={userDisplayName}>
-            <span aria-hidden="true">{userInitials}</span>
-          </summary>
-          <div className="dashboardAccountPopover">
-            <div className="accountCard">
-              <span className="accountAvatar" aria-hidden="true">{userInitials}</span>
-              <div className="accountInfo">
-                <strong className="accountName" title={userDisplayName}>{userDisplayName}</strong>
-                <small className="accountEmail" title={initial.user.email}>{initial.user.email}</small>
-              </div>
-            </div>
-            <a className="logoutButton" href="/api/profile/export" download>Export my data</a>
-            <button className="logoutButton logoutDanger" disabled={busy} type="button" onClick={deleteAccount}>Delete account</button>
-            <form action="/logout" method="post" className="logoutForm"><button className="logoutButton" type="submit">Sign out</button></form>
-          </div>
-        </details>
+    <div className={styles.profileEditor}>
+      <header className={styles.pageHeading}>
+        <div>
+          <h1>Profile</h1>
+          <p>{status === "suspended" ? "A Suspended Profile cannot be published." : "Edits stay in your Draft Profile until you publish. Public updates can take up to 60 seconds."}</p>
+        </div>
+        <span className={styles.badge} data-status={status === "published" ? "approved" : undefined}>
+          {status === "published" ? "Published Profile" : status === "suspended" ? "Suspended Profile" : "Draft Profile"}
+        </span>
       </header>
-      <div className="dashboardBody" data-section={section}>
-        <aside className="dashboardNav">
-          <div>
-            <p className="navLabel">Workspace</p>
+      <div className={styles.profilePanels}>
+        <section className={styles.profileFields} aria-label="Edit Draft Profile">
+          <div className={styles.tabs} role="group" aria-label="Profile sections">
             {sections.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={section === item ? "selected" : ""}
-                aria-pressed={section === item}
-                onClick={() => setSection(item)}
-              >
-                <span aria-hidden="true">{item.slice(0, 1)}</span>
-                {item}
-              </button>
+              <button key={item} type="button" aria-pressed={section === item} onClick={() => setSection(item)}>{item}</button>
             ))}
           </div>
+          <a className={styles.previewShortcut} href="#profile-preview">See Draft Profile preview</a>
 
-          <div className="dashboardNavFooter">
-            <div className="accountCard">
-              <span className="accountAvatar" aria-hidden="true">{userInitials}</span>
-              <div className="accountInfo">
-                <strong className="accountName" title={userDisplayName}>{userDisplayName}</strong>
-                <small className="accountEmail" title={initial.user.email}>{initial.user.email}</small>
-              </div>
-            </div>
-            <a className="logoutButton" href="/api/profile/export" download>Export my data</a>
-            <button className="logoutButton logoutDanger" disabled={busy} type="button" onClick={deleteAccount}>Delete account</button>
-            <form action="/logout" method="post" className="logoutForm">
-              <button className="logoutButton" type="submit" aria-label="Sign out">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                <span>Sign out</span>
-              </button>
-            </form>
-          </div>
-        </aside>
-        <section className="editorPane">
-          <div className="editorHeading"><div><h1>{section}</h1><p className="headingContext">Private draft. Publishing or unpublishing can take up to 60 seconds to reach every location.</p></div><span className="statusBadge">{status === "published" ? "Published" : status === "suspended" ? "Suspended" : "Not published"}</span></div>
-
-          {section === "Profile" && <div className="formStack">
-            <div className="uploadRow"><div className="avatar avatarSmall" style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}>{avatarUrl ? "" : name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><div><input ref={avatarInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("avatar", event.target)} /><button className="buttonSecondary buttonSmall" type="button" onClick={() => avatarInput.current?.click()}>Choose photo</button><p>JPEG, PNG, or WebP. Up to 2 MB.</p></div></div>
+          {section === "Details" && <div className="formStack">
+            <div className="uploadRow"><div className="avatar avatarSmall" style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}>{avatarUrl ? "" : name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><div><input ref={avatarInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("avatar", event.target)} /><button className={styles.secondary} type="button" onClick={() => avatarInput.current?.click()}>Choose photo</button><p>JPEG, PNG, or WebP. Up to 2 MB.</p></div></div>
             <label className="field">Display name<input value={name} maxLength={128} onChange={(event) => setName(event.target.value)} /></label>
             <label className="field">Role or title<input value={role} maxLength={128} onChange={(event) => setRole(event.target.value)} /></label>
             <label className="field">Short bio<textarea value={bio} maxLength={500} rows={4} onChange={(event) => setBio(event.target.value)} /><span>{bio.length}/500</span></label>
@@ -210,11 +179,29 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
                 <span>Show student number on my public profile card<small>{usesCsaForm ? "When you publish with the CSA evaluation form, visitors can see your student number in the form and in the public page source, even if this setting is off." : "Applies when you publish."}</small></span>
               </label>
             </div>
-            <label className="field">Permanent profile address<div className="slugField"><span>/id/</span><input value={slug} disabled={Boolean(claimedSlug)} maxLength={64} aria-label="Profile slug" onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} />{!claimedSlug && <button className="buttonSecondary buttonSmall" disabled={busy || slug.length < 3} type="button" onClick={claim}>Claim address</button>}</div><small role={slugError ? "alert" : undefined}>{slugError || (claimedSlug ? "This permanent address is locked." : "Choose carefully. Once claimed, this address can never change.")}</small></label>
+            <div className="field">
+              <label htmlFor="profile-address">{claimedSlug ? "Permanent URL for your NFC Card" : "Choose your permanent Slug"}</label>
+              <div className={claimedSlug ? "permanentUrl" : "slugField"}>
+                {claimedSlug ? (
+                  <>
+                    <input id="profile-address" ref={permanentUrlInput} value={permanentUrl} readOnly />
+                    <button className={styles.secondary} type="button" onClick={copyPermanentUrl}>Copy URL</button>
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true">/id/</span>
+                    <input id="profile-address" value={slug} maxLength={64} aria-label="Profile slug" onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} />
+                    <button className={styles.secondary} disabled={busy || slug.length < 3} type="button" onClick={claim}>Claim address</button>
+                  </>
+                )}
+              </div>
+              <small role={slugError ? "alert" : undefined}>{slugError || (claimedSlug ? "Program this URL into your NFC Card. The URL stays the same when you publish updates." : "Your Slug becomes part of the URL you program into your NFC Card. It cannot change after you claim it.")}</small>
+              <small aria-live="polite">{copyNotice}</small>
+            </div>
           </div>}
 
           {section === "Appearance" && <div className="formStack">
-            <div className="backgroundUpload"><div><strong>Background image</strong><p>JPEG, PNG, or WebP. Up to 4 MB.</p></div><input ref={backgroundInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("background", event.target)} /><button className="buttonSecondary buttonSmall" type="button" onClick={() => backgroundInput.current?.click()}>Choose background</button></div>
+            <div className="backgroundUpload"><div><strong>Background image</strong><p>JPEG, PNG, or WebP. Up to 4 MB.</p></div><input ref={backgroundInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("background", event.target)} /><button className={styles.secondary} type="button" onClick={() => backgroundInput.current?.click()}>Choose background</button></div>
             <fieldset className="appearanceControls">
               <legend>Profile colors</legend>
               <div className="appearanceColors">
@@ -253,42 +240,52 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
                 <span>Frosted glass<small>Blurs the background behind the card.</small></span>
               </label>
             </fieldset>
-            <div className="appearanceActions">
-              {appearance && <button type="button" className="buttonSecondary buttonSmall" onClick={() => setAppearance(null)}>Reset card styles</button>}
-              <a className="appearancePreviewLink" href="#profile-preview">View live preview</a>
-            </div>
+            {appearance && <div><button type="button" className={styles.secondary} onClick={() => setAppearance(null)}>Reset card styles</button></div>}
           </div>}
 
           {section === "Links" && <div className="formStack linksForm">
             <p className="sectionIntro">Add up to eight HTTPS links. Each platform can appear once.</p>
             {links.map((link, index) => <div className="linkRow" key={`${link.service}-${index}`}><span className="dragHandle">{index + 1}</span><div><select value={link.service} aria-label={`Link ${index + 1} platform`} onChange={(event) => setLinks(links.map((item, itemIndex) => itemIndex === index ? { ...item, service: event.target.value as ProfileService } : item))}>{services.map((service) => <option key={service} value={service} disabled={links.some((item, itemIndex) => itemIndex !== index && item.service === service)}>{labels[service]}</option>)}</select><input type="url" value={link.url} placeholder={`https://${link.service}.com/…`} aria-label={`${labels[link.service]} URL`} onChange={(event) => setLinks(links.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} /></div><button type="button" aria-label={`Remove ${labels[link.service]}`} onClick={() => setLinks(links.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}
-            <button className="buttonSecondary addLink" disabled={links.length >= services.length} type="button" onClick={addLink}>Add social link</button>
+            <button className={styles.secondary} disabled={links.length >= services.length} type="button" onClick={addLink}>Add social link</button>
           </div>}
         </section>
-        <aside className="previewPane" id="profile-preview" aria-label="Live profile preview">
+        <aside className={styles.profilePreview} id="profile-preview" tabIndex={-1} aria-label="Draft Profile preview">
           <div className="previewHeader">
-            <div><p>Live preview</p><span>Mobile</span></div>
+            <h2>Draft Profile preview</h2>
             {status === "published" && claimedSlug && (
-              <Link className="previewOpen" href={`/id/${claimedSlug}`}>
-                Open published profile
+              <Link className={styles.secondary} href={`/id/${claimedSlug}`}>
+                Open Published Profile
               </Link>
             )}
           </div>
           <div className="phoneFrame"><div className="phoneTop"><span /></div><ProfileCard compact name={name || "Your name"} role={role} bio={bio} studentNumber={showStudentNumber ? studentNumber.trim() : undefined} primary={color} avatarUrl={avatarUrl} coverUrl={backgroundUrl} appearance={appearance} socialLinks={links.filter((link) => link.url.trim()).map(({ service }) => ({ service, label: labels[service] }))} /></div>
         </aside>
       </div>
-      <footer className="dashboardFooter" aria-label="Profile actions">
-        <div className="dashboardActions">
-          {claimedSlug && <Link className="buttonSecondary buttonSmall" href={`/id/${claimedSlug}`}>View profile</Link>}
-          <button className="buttonSecondary buttonSmall" disabled={busy} type="button" onClick={() => save()}>Save draft</button>
-          <button className="button buttonSmall" disabled={busy} type="button" onClick={publish}>
-            <span className="publishLabelFull">{status === "published" ? "Publish changes" : "Publish profile"}</span>
-            <span className="publishLabelCompact">Publish</span>
+      <footer className={styles.profileFooter} aria-label="Profile actions">
+        <div className={styles.flex}>
+          <button className={styles.secondary} disabled={busy} type="button" onClick={() => save()}>Save draft</button>
+          <button className={styles.button} disabled={busy || status === "suspended"} type="button" onClick={publish}>
+            {status === "published" ? "Publish changes" : "Publish profile"}
           </button>
-          {status === "published" && <button className="buttonSecondary buttonSmall dashboardUnpublish" disabled={busy} type="button" onClick={unpublish}>Unpublish</button>}
+          {status === "published" && <button className={styles.secondary} disabled={busy} type="button" onClick={unpublish}>Unpublish</button>}
         </div>
-        <span className="saveState" role="status">{notice}</span>
+        <div className={styles.profileSaveStatus}>
+          {status === "published" && initial.hasUnpublishedChanges && <strong>Saved Draft Profile changes have not been published.</strong>}
+          <span role="status">{notice}</span>
+        </div>
       </footer>
-    </main>
+      <details className={styles.profileAccount}>
+        <summary>Sign-in and data</summary>
+        <div className={styles.stack}>
+          <div><strong>{initial.user.name || initial.user.email}</strong><br /><small>{initial.user.email}</small></div>
+          <div className={styles.flex}>
+            {initial.canReviewReports && <Link className={styles.secondary} href="/admin">Abuse Reports</Link>}
+            <a className={styles.secondary} href="/api/profile/export" download>Export my data</a>
+            <button className={styles.secondary} disabled={busy} type="button" onClick={deleteAccount}>Delete account</button>
+            <form action="/logout" method="post"><button className={styles.secondary} type="submit">Sign out</button></form>
+          </div>
+        </div>
+      </details>
+    </div>
   );
 }

@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
+import "server-only";
 import type { BatchItem } from "drizzle-orm/batch";
-import { draftSocialLinks, profiles, reservedSlugs } from "@/lib/db/schema";
+import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, reservedSlugs } from "@/lib/db/schema";
+import { evaluationFormUrl, isCsaEvaluationForm } from "@/lib/evaluation-form";
+import { defaultAppearance } from "@/lib/profile-appearance";
 import type { Db } from "@/lib/auth/session";
 import { checkSlug, type ProfileInput } from "@/lib/profile-validation";
 
@@ -11,6 +14,42 @@ export async function readDraft(db: Db, userId: string) {
   if (!profile) return null;
   const links = await db.select().from(draftSocialLinks).where(eq(draftSocialLinks.profileId, profile.id)).orderBy(draftSocialLinks.displayOrder);
   return { profile, links };
+}
+
+export async function readProfileEditor(db: Db, userId: string) {
+  const draft = await readDraft(db, userId);
+  if (!draft) return null;
+  const { profile, links } = draft;
+  if (profile.status !== "published") return { ...draft, hasUnpublishedChanges: false };
+
+  const owner = and(eq(profiles.id, profile.id), eq(profiles.userId, userId));
+  const [[published], publicLinks] = await db.batch([
+    db.select({ snapshot: publishedProfiles }).from(publishedProfiles)
+      .innerJoin(profiles, eq(publishedProfiles.profileId, profiles.id)).where(owner),
+    db.select({ service: publishedSocialLinks.service, url: publishedSocialLinks.url })
+      .from(publishedSocialLinks).innerJoin(profiles, eq(publishedSocialLinks.profileId, profiles.id))
+      .where(owner).orderBy(publishedSocialLinks.displayOrder),
+  ]);
+  if (!published) return { ...draft, hasUnpublishedChanges: true };
+
+  const snapshot = published.snapshot;
+  const evaluationUrl = profile.evaluationUrl || evaluationFormUrl;
+  const studentNumber = profile.showStudentNumber || isCsaEvaluationForm(evaluationUrl) ? profile.studentNumber : null;
+  const appearance = profile.appearance ?? defaultAppearance;
+  const publicAppearance = snapshot.appearance ?? defaultAppearance;
+  const hasUnpublishedChanges =
+    profile.displayName !== snapshot.displayName || profile.role !== snapshot.role ||
+    profile.bio !== snapshot.bio || profile.accentColor.toLowerCase() !== snapshot.accentColor.toLowerCase() ||
+    profile.avatarKey !== snapshot.avatarKey || profile.backgroundKey !== snapshot.backgroundKey ||
+    evaluationUrl !== snapshot.evaluationUrl || studentNumber !== snapshot.studentNumber ||
+    profile.showStudentNumber !== snapshot.showStudentNumber ||
+    appearance.iconColor.toLowerCase() !== publicAppearance.iconColor.toLowerCase() ||
+    appearance.cardColor.toLowerCase() !== publicAppearance.cardColor.toLowerCase() ||
+    appearance.cardOpacity !== publicAppearance.cardOpacity || appearance.frosted !== publicAppearance.frosted ||
+    links.length !== publicLinks.length || links.some((link, index) =>
+      link.service !== publicLinks[index]?.service || link.url !== publicLinks[index]?.url
+    );
+  return { ...draft, hasUnpublishedChanges };
 }
 
 export async function saveDraft(db: Db, userId: string, input: ProfileInput) {

@@ -8,8 +8,8 @@ export function SiteHeader() {
         <a className="skipLink" href="#main">Skip to content</a>
         <Brand />
         <nav className="headerNav" aria-label="Primary navigation">
-          <Link className="textLink" href="/id/demo">View a profile</Link>
-          <Link className="button buttonSmall" href="/login">Open dashboard</Link>
+          <Link className="textLink" href="/id/demo">View a sample Profile</Link>
+          <Link className="button buttonSmall" href="/login">Sign in</Link>
         </nav>
       </div>
     </header>

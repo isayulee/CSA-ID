@@ -35,3 +35,7 @@ CLAUDE.local.md
 
 # verify skill run evidence
 /.verify-runs/
+
+# Local issue documentation
+/.md/issue-72-frontend.md
+/.md/issue-72-frontend-pr.md

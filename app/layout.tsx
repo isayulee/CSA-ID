@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CSA Student Assistant Profiles",
-  description: "Mapúa University CSA profiles for tutoring sessions, NFC sharing, and evaluation handoff.",
+  title: "CSA Digital Profile",
+  description: "Published Profiles and the private Peer Advisers’ Portal from the Mapúa University CSA.",
   robots: { index: false, follow: false },
   other: {
     "page-type": "software",

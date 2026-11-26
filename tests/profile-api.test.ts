@@ -202,3 +202,25 @@ describe("slug claim (#6)", () => {
     expect(await t.db.select().from(reservedSlugs).where(eq(reservedSlugs.slug, "race-slug"))).toHaveLength(1);
   });
 });
+
+it("reads unpublished changes only for the owning User", async () => {
+  const { readProfileEditor } = await import("@/lib/profile-data");
+  const first = { user: { id: "" }, profile: { id: "" } };
+  const second = { user: { id: "" }, profile: { id: "" } };
+  await makeAccount("editor-first", first);
+  await makeAccount("editor-second", second);
+  const publish = await import("@/app/api/profile/publish/route");
+
+  for (const [account, slug] of [[first, "editor-first"], [second, "editor-second"]] as const) {
+    await t.db.update(profiles).set({ slug, role: "Peer Adviser", evaluationUrl: "https://example.test/evaluation" }).where(eq(profiles.id, account.profile.id));
+    const [profile] = await t.db.select().from(profiles).where(eq(profiles.id, account.profile.id));
+    current = { user: account.user, profile };
+    expect((await publish.POST(req("POST", "/api/profile/publish"))).status).toBe(200);
+  }
+
+  const privateBio = "The other User cannot read this Draft Profile.";
+  await t.db.update(profiles).set({ bio: privateBio }).where(eq(profiles.userId, first.user.id));
+  expect(await readProfileEditor(t.db, first.user.id)).toMatchObject({ profile: { bio: privateBio }, hasUnpublishedChanges: true });
+  expect(await readProfileEditor(t.db, second.user.id)).toMatchObject({ profile: { bio: "" }, hasUnpublishedChanges: false });
+  expect(await readProfileEditor(t.db, crypto.randomUUID())).toBeNull();
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { OpenReport } from "@/lib/admin";
 
 const REASON_LABELS: Record<string, string> = {
@@ -11,14 +11,24 @@ const REASON_LABELS: Record<string, string> = {
 
 type Action = "suspend" | "remove-images";
 
+const reportDateTime = new Intl.DateTimeFormat("en-PH", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Manila",
+});
+
 function ReportRow({ report }: { report: OpenReport }) {
+  const createdAt = new Date(report.createdAt * 1000);
+  const resultRef = useRef<HTMLParagraphElement>(null);
+  const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
+  const busy = activeAction !== null;
   const [notice, setNotice] = useState("");
   const [status, setStatus] = useState(report.profileStatus);
 
   async function run(action: Action) {
-    setBusy(true);
+    setActiveAction(action);
+    resultRef.current?.focus();
     setNotice(action === "suspend" ? "Suspending…" : "Removing images…");
     try {
       const response = await fetch(`/api/admin/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profileId: report.profileId, reason }) });
@@ -30,7 +40,7 @@ function ReportRow({ report }: { report: OpenReport }) {
     } catch {
       setNotice("That didn't work. Check your connection and try again");
     } finally {
-      setBusy(false);
+      setActiveAction(null);
     }
   }
 
@@ -39,7 +49,7 @@ function ReportRow({ report }: { report: OpenReport }) {
     <li className="adminReport">
       <div className="adminReportHead">
         <strong>{REASON_LABELS[report.reason] ?? report.reason}</strong>
-        <time dateTime={new Date(report.createdAt * 1000).toISOString()}>{new Date(report.createdAt * 1000).toLocaleString()}</time>
+        <time dateTime={createdAt.toISOString()}>{reportDateTime.format(createdAt)}</time>
       </div>
       <p className="adminReportProfile">
         {report.profileId
@@ -53,10 +63,10 @@ function ReportRow({ report }: { report: OpenReport }) {
             <input value={reason} maxLength={1000} onChange={(event) => setReason(event.target.value)} />
           </label>
           <div className="buttonRow">
-            <button className="button buttonSmall" type="button" disabled={!canAct || status === "suspended"} onClick={() => run("suspend")}>Suspend Profile</button>
-            <button className="buttonSecondary buttonSmall" type="button" disabled={!canAct} onClick={() => run("remove-images")}>Remove images</button>
+            <button className="button buttonSmall" type="button" disabled={!canAct || status === "suspended"} aria-label={`Suspend Profile for ${report.displayName ?? "this User"}`} onClick={() => run("suspend")}>{activeAction === "suspend" ? "Suspending…" : "Suspend Profile"}</button>
+            <button className="buttonSecondary buttonSmall" type="button" disabled={!canAct} aria-label={`Remove images for ${report.displayName ?? "this User"}`} onClick={() => run("remove-images")}>{activeAction === "remove-images" ? "Removing images…" : "Remove images"}</button>
           </div>
-          <p className="formStatus" role="status">{notice}</p>
+          <p className="formStatus" role="status" ref={resultRef} tabIndex={-1}>{notice}</p>
         </div>
       )}
     </li>
@@ -64,6 +74,6 @@ function ReportRow({ report }: { report: OpenReport }) {
 }
 
 export function AdminReports({ reports }: { reports: OpenReport[] }) {
-  if (reports.length === 0) return <p>No open reports.</p>;
+  if (reports.length === 0) return <p>No open Abuse Reports.</p>;
   return <ul className="adminReportList">{reports.map((report) => <ReportRow key={report.id} report={report} />)}</ul>;
 }
