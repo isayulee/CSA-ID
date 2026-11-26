@@ -217,6 +217,7 @@ gh pr create --repo ymsrubio/CSA-ID --base main
 The pull request template asks for:
 
 - `Closes #<n>`, so merging the pull request closes the ticket.
+- The problem the pull request solves and who has it, in one or two sentences, so reviewers understand it before they read the change.
 - A short summary of what changed and why.
 - The preview link and proof that the change works there.
 - The checklist of checks, plus the live migration if there is one.

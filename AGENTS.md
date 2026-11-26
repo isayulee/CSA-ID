@@ -87,7 +87,7 @@ Previews run on the same `csa-id` Worker as the live site and share its D1 datab
 
 ## Commits and pull requests
 
-- One ticket per pull request. The body starts with `Closes #<n>` and follows `.github/pull_request_template.md`.
+- One ticket per pull request. The body starts with `Closes #<n>`, then opens with `## Problem`: the problem the pull request solves and who has it, in one or two sentences. The rest follows `.github/pull_request_template.md`.
 - Commit subjects and the pull request title use Conventional Commits: `<type>(<scope>): <summary>`, imperative, lowercase after the colon, no trailing period. Types and examples are in [CONTRIBUTING.md](CONTRIBUTING.md#commit).
 - The owner merges. Agents open the pull request and stop there.
 
