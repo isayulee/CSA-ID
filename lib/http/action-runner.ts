@@ -26,7 +26,7 @@ export async function runMutation<A>(
   request: Request,
   getAccount: () => Promise<A | null>,
   action: (account: A, body: unknown) => Promise<MutationResult>,
-  options: GuardOptions = {},
+  options: GuardOptions<A> = {},
 ) {
   const guard = await guardMutation(request, getAccount, options);
   if (!guard.ok) return guard.response;
