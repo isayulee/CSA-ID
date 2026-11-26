@@ -1,25 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { rankPeerAdvisers, type MatchingPeerAdviser, type MatchingRequest } from "@/lib/matching";
+import {
+  rankPeerAdvisers,
+  type AdvisingRequestForMatching,
+  type MatchingResult,
+  type PeerAdviserForMatching,
+} from "@/lib/matching";
 
-const request: MatchingRequest = {
+const request: AdvisingRequestForMatching = {
   courseCode: "MATH146",
   campusId: "intramuros",
   timesUnclear: false,
-  slots: [{ weekday: 1, onDate: "", hour: 9 }],
+  slots: [{ weekday: 1, hour: 9 }],
 };
 
-function peerAdviser(userId: string, overrides: Partial<MatchingPeerAdviser> = {}): MatchingPeerAdviser {
+function peerAdviser(userId: string, overrides: Partial<PeerAdviserForMatching> = {}): PeerAdviserForMatching {
   return {
     userId,
     campusId: "intramuros",
     courseCodes: ["MATH146"],
     availability: [{ weekday: 1, hour: 9 }],
-    openRequestCount: 0,
+    claimedPendingOrRescheduledCount: 0,
     ...overrides,
   };
 }
 
-function rankedIds(result: ReturnType<typeof rankPeerAdvisers>) {
+function rankedIds(result: MatchingResult) {
   if (!result.ok) throw new Error(`expected suggestions, got ${result.reasons.join(", ")}`);
   return result.suggestions.map((suggestion) => suggestion.userId);
 }
@@ -37,17 +42,17 @@ describe("rankPeerAdvisers", () => {
   });
 
   it("ranks by how many of the request's slots fall in each Peer Adviser's Availability", () => {
-    const busyMonday: MatchingRequest = {
+    const threeSlots: AdvisingRequestForMatching = {
       ...request,
       slots: [
-        { weekday: 1, onDate: "", hour: 9 },
-        { weekday: 1, onDate: "", hour: 10 },
-        { weekday: 3, onDate: "", hour: 14 },
+        { weekday: 1, hour: 9 },
+        { weekday: 1, hour: 10 },
+        { weekday: 3, hour: 14 },
       ],
     };
 
-    const result = rankPeerAdvisers(busyMonday, [
-      peerAdviser("one-hour", { availability: [{ weekday: 3, hour: 14 }] }),
+    const result = rankPeerAdvisers(threeSlots, [
+      peerAdviser("one-slot", { availability: [{ weekday: 3, hour: 14 }] }),
       peerAdviser("no-overlap", { availability: [{ weekday: 2, hour: 9 }] }),
       peerAdviser("all-three", {
         availability: [
@@ -58,7 +63,7 @@ describe("rankPeerAdvisers", () => {
         ],
       }),
       peerAdviser("same-hour-other-day", { availability: [{ weekday: 2, hour: 10 }] }),
-      peerAdviser("two-hours", {
+      peerAdviser("two-slots", {
         availability: [
           { weekday: 1, hour: 10 },
           { weekday: 3, hour: 14 },
@@ -69,51 +74,38 @@ describe("rankPeerAdvisers", () => {
     expect(result).toEqual({
       ok: true,
       suggestions: [
-        { userId: "all-three", matchingSlots: 3, openRequestCount: 0 },
-        { userId: "two-hours", matchingSlots: 2, openRequestCount: 0 },
-        { userId: "one-hour", matchingSlots: 1, openRequestCount: 0 },
-        { userId: "no-overlap", matchingSlots: 0, openRequestCount: 0 },
-        { userId: "same-hour-other-day", matchingSlots: 0, openRequestCount: 0 },
+        { userId: "all-three", matchingSlots: 3, claimedPendingOrRescheduledCount: 0 },
+        { userId: "two-slots", matchingSlots: 2, claimedPendingOrRescheduledCount: 0 },
+        { userId: "one-slot", matchingSlots: 1, claimedPendingOrRescheduledCount: 0 },
+        { userId: "no-overlap", matchingSlots: 0, claimedPendingOrRescheduledCount: 0 },
+        { userId: "same-hour-other-day", matchingSlots: 0, claimedPendingOrRescheduledCount: 0 },
       ],
     });
   });
 
-  it("scores a dated slot by the weekday of its date", () => {
-    // 2026-12-02 is a Wednesday.
-    const datedRequest: MatchingRequest = { ...request, slots: [{ weekday: 3, onDate: "2026-12-02", hour: 13 }] };
-
-    const result = rankPeerAdvisers(datedRequest, [
-      peerAdviser("monday", { availability: [{ weekday: 1, hour: 13 }] }),
-      peerAdviser("wednesday", { availability: [{ weekday: 3, hour: 13 }] }),
-    ]);
-
-    expect(rankedIds(result)).toEqual(["wednesday", "monday"]);
-  });
-
-  it("counts each slot, so an hour offered on two dates counts twice", () => {
-    // 2026-12-07 and 2026-12-14 are Mondays.
-    const twoMondays: MatchingRequest = {
+  it("counts an hour twice when the Advisee offers it on two dates", () => {
+    const twoMondays: AdvisingRequestForMatching = {
       ...request,
       slots: [
-        { weekday: 1, onDate: "2026-12-07", hour: 9 },
-        { weekday: 1, onDate: "2026-12-14", hour: 9 },
+        { weekday: 1, hour: 9 },
+        { weekday: 1, hour: 9 },
       ],
     };
 
     expect(rankPeerAdvisers(twoMondays, [peerAdviser("monday-nine")])).toEqual({
       ok: true,
-      suggestions: [{ userId: "monday-nine", matchingSlots: 2, openRequestCount: 0 }],
+      suggestions: [{ userId: "monday-nine", matchingSlots: 2, claimedPendingOrRescheduledCount: 0 }],
     });
   });
 
-  it("breaks a tie in overlapping hours by the fewest open requests", () => {
+  it("breaks a tie in matching slots by fewer claimed pending or rescheduled requests", () => {
     const result = rankPeerAdvisers(request, [
-      peerAdviser("three-open", { openRequestCount: 3 }),
-      peerAdviser("no-overlap-idle", { availability: [], openRequestCount: 0 }),
-      peerAdviser("one-open", { openRequestCount: 1 }),
+      peerAdviser("busy", { claimedPendingOrRescheduledCount: 3 }),
+      peerAdviser("free-elsewhere", { availability: [], claimedPendingOrRescheduledCount: 0 }),
+      peerAdviser("quiet", { claimedPendingOrRescheduledCount: 1 }),
     ]);
 
-    expect(rankedIds(result)).toEqual(["one-open", "three-open", "no-overlap-idle"]);
+    expect(rankedIds(result)).toEqual(["quiet", "busy", "free-elsewhere"]);
   });
 
   it("returns the same order whatever order the Peer Advisers arrive in", () => {
@@ -140,7 +132,7 @@ describe("rankPeerAdvisers", () => {
       });
     });
 
-    it("when the advisee's times are unclear, even if slots exist", () => {
+    it("when the Advisee's times are unclear, even if slots exist", () => {
       expect(rankPeerAdvisers({ ...request, timesUnclear: true }, everyone)).toEqual({
         ok: false,
         reasons: ["times_unclear"],

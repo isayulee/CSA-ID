@@ -1,36 +1,39 @@
-/** Weekday 1 = Monday ... 6 = Saturday; hour 8 = 08:00-09:00 ... 16 = 16:00-17:00 (section 14.3). */
+/** 1 is Monday and 6 is Saturday. */
 export type Weekday = 1 | 2 | 3 | 4 | 5 | 6;
+/** 8 is the hour from 08:00 to 09:00, and 16 is the hour from 16:00 to 17:00. */
 export type Hour = 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
-export type MatchingRequest = {
+export type HourSlot = { weekday: Weekday; hour: Hour };
+
+export type AdvisingRequestForMatching = {
   courseCode: string | null;
   campusId: string | null;
   timesUnclear: boolean;
-  /** A dated slot keeps its date's weekday; a weekly slot has onDate "". */
-  slots: readonly { weekday: Weekday; onDate: string; hour: Hour }[];
+  /** A dated slot carries the weekday of its date. */
+  slots: readonly HourSlot[];
 };
 
-export type MatchingPeerAdviser = {
+export type PeerAdviserForMatching = {
   userId: string;
   campusId: string;
   courseCodes: readonly string[];
-  availability: readonly { weekday: Weekday; hour: Hour }[];
-  /** Requests they claimed whose status is pending or rescheduled. */
-  openRequestCount: number;
+  availability: readonly HourSlot[];
+  claimedPendingOrRescheduledCount: number;
 };
 
-export type Suggestion = { userId: string; matchingSlots: number; openRequestCount: number };
+export type Suggestion = { userId: string; matchingSlots: number; claimedPendingOrRescheduledCount: number };
+
+export type NoSuggestionReason = "course_missing" | "campus_missing" | "times_unclear";
 
 export type MatchingResult =
   | { ok: true; suggestions: Suggestion[] }
   | { ok: false; reasons: NoSuggestionReason[] };
 
-export type NoSuggestionReason = "course_missing" | "campus_missing" | "times_unclear";
+const slotKey = ({ weekday, hour }: HourSlot) => weekday * 100 + hour;
 
-/** Ranks Peer Advisers for an unclaimed Advising Request (section 14.6). Never assigns and stores nothing. */
 export function rankPeerAdvisers(
-  request: MatchingRequest,
-  peerAdvisers: readonly MatchingPeerAdviser[],
+  request: AdvisingRequestForMatching,
+  peerAdvisers: readonly PeerAdviserForMatching[],
 ): MatchingResult {
   const { courseCode, campusId } = request;
   if (courseCode === null || campusId === null || request.timesUnclear) {
@@ -41,21 +44,22 @@ export function rankPeerAdvisers(
     return { ok: false, reasons };
   }
 
+  const requestSlotKeys = request.slots.map(slotKey);
   const suggestions = peerAdvisers
     .filter((peerAdviser) => peerAdviser.campusId === campusId && peerAdviser.courseCodes.includes(courseCode))
     .map((peerAdviser) => {
-      const free = new Set(peerAdviser.availability.map(({ weekday, hour }) => weekday * 100 + hour));
+      const free = new Set(peerAdviser.availability.map(slotKey));
       return {
         userId: peerAdviser.userId,
-        matchingSlots: request.slots.filter(({ weekday, hour }) => free.has(weekday * 100 + hour)).length,
-        openRequestCount: peerAdviser.openRequestCount,
+        matchingSlots: requestSlotKeys.filter((key) => free.has(key)).length,
+        claimedPendingOrRescheduledCount: peerAdviser.claimedPendingOrRescheduledCount,
       };
     })
     .sort(
       (a, b) =>
         b.matchingSlots - a.matchingSlots ||
-        a.openRequestCount - b.openRequestCount ||
-        (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+        a.claimedPendingOrRescheduledCount - b.claimedPendingOrRescheduledCount ||
+        a.userId.localeCompare(b.userId),
     );
   return { ok: true, suggestions };
 }
