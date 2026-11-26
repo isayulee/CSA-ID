@@ -7,7 +7,7 @@ import { Settings, Directory } from "./people";
 import { PeerAdviserApprovals, type ApprovalAction } from "./peer-adviser-approvals";
 import { Scheduler } from "./scheduler";
 import { TeachingKits, KitReviews } from "./teaching-kits";
-import { academicTerm, campuses, candidates, getPreview, getSeed, peerId, statuses, subscribe, updatePreview, type PreviewState } from "./model";
+import { academicTerm, campuses, candidates, courses, getPreview, getSeed, peerId, statuses, subscribe, updatePreview, type PreviewState } from "./model";
 import styles from "./portal.module.css";
 
 type Area = "home" | "kits" | "scheduler" | "directory" | "me" | "peer-advisers" | "kit-drafts" | "assignments";
@@ -90,8 +90,22 @@ export function PortalPreview({ area, kitId, edit, requestId = "" }: { area: Are
       {area === "home" && <PreviewHome state={state} />}
       {(area === "scheduler" || area === "assignments") && <Scheduler key={requestId} state={state} administrator={isAdmin} requestId={requestId} />}
       {area === "kits" && <TeachingKits state={state} kitId={kitId} edit={edit} />}
-      {area === "directory" && <Directory state={state} />}
-      {area === "me" && <Settings adviser={state.advisers.find((adviser) => adviser.id === peerId)} />}
+      {area === "directory" && <Directory advisers={state.advisers} />}
+      {area === "me" && <Settings
+        adviser={state.advisers.find((adviser) => adviser.id === peerId)}
+        campuses={campuses}
+        courses={[...courses, ...(state.addedCourses ?? [])]}
+        onSave={(settings) => {
+          updatePreview((current) => ({
+            ...current,
+            advisers: current.advisers.map((adviser) => adviser.id === peerId ? { ...adviser, ...settings } : adviser),
+          }));
+          return "Campus, Courses, and Availability saved in this preview.";
+        }}
+        onAddCourse={(course) => updatePreview((current) => ({
+          ...current, addedCourses: [...(current.addedCourses ?? []), course],
+        }))}
+      />}
       {area === "peer-advisers" && <PeerAdviserApprovals
         advisers={state.advisers}
         candidates={candidates.filter((person) => !state.advisers.some(({ id }) => id === person.id))}
