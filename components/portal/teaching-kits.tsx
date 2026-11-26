@@ -14,7 +14,11 @@ function validMaterialLink(value: string) {
   } catch { return false; }
 }
 
-function KitDraftDialog({ kit, draft }: { kit?: Kit; draft?: KitDraft }) {
+function KitDraftDialog({ kit, draft, availableCourses }: {
+  kit?: Kit;
+  draft?: KitDraft;
+  availableCourses: typeof courses;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const [error, setError] = useState("");
@@ -73,7 +77,7 @@ function KitDraftDialog({ kit, draft }: { kit?: Kit; draft?: KitDraft }) {
       <label className={styles.field}>Title<input name="title" required maxLength={128} defaultValue={initial?.title} /></label>
       {initial ? <small>{initial.course} · {academicTerm(initial.year, initial.term)}</small> :
         <div className={styles.formGrid}>
-          <label className={styles.field}>Course<select name="course" required>{courses.map((course) => <option value={course.code} key={course.code}>{course.code} · {course.title}</option>)}</select></label>
+          <label className={styles.field}>Course<select name="course" required>{availableCourses.map((course) => <option value={course.code} key={course.code}>{course.code} · {course.title}</option>)}</select></label>
           <label className={styles.field}>Academic year starts<input name="year" required type="number" min={2000} max={2100} defaultValue={2026} /></label>
           <label className={styles.field}>Term<select name="term">{[1, 2, 3, 4].map((term) => <option key={term}>{term}</option>)}</select></label>
         </div>}
@@ -98,6 +102,7 @@ export function TeachingKits({ state, kitId, edit }: { state: PreviewState; kitI
   const [term, setTerm] = useState("");
   const [query, setQuery] = useState("");
   const [draftView, setDraftView] = useState(false);
+  const availableCourses = [...courses, ...(state.addedCourses ?? [])];
   const kit = state.kits.find((item) => item.id === kitId);
   const draft = state.drafts.find((item) => item.id === kitId && item.author === peerId && item.state === "pending");
   const terms = [...new Set(state.kits.map((item) => academicTerm(item.year, item.term)))];
@@ -137,7 +142,7 @@ export function TeachingKits({ state, kitId, edit }: { state: PreviewState; kitI
       </div> : <>
         <div className={styles.filters} aria-label="Teaching Kit filters">
           <label className={styles.field}>Search Teaching Kits<input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, Course, or topic" /></label>
-          <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{courses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
+          <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{availableCourses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
           <label className={styles.field}>Academic term<select value={term} onChange={(e) => setTerm(e.target.value)}><option value="">All terms</option>{terms.map((item) => <option key={item}>{item}</option>)}</select></label>
         </div>
         {visibleKits.length === 0 && <p className={styles.panel} role="status">No approved Teaching Kits match your filters.</p>}
@@ -148,19 +153,25 @@ export function TeachingKits({ state, kitId, edit }: { state: PreviewState; kitI
         ))}</div>
       </>}
     </>}
-    {edit && isApprovedPeerAdviser && (kit || draft || kitId === "new") && <KitDraftDialog key={kitId} kit={kit} draft={draft} />}
+    {edit && isApprovedPeerAdviser && (kit || draft || kitId === "new") && <KitDraftDialog key={kitId} kit={kit} draft={draft} availableCourses={availableCourses} />}
   </>;
 }
 
-export function KitReviews({ drafts }: { drafts: KitDraft[] }) {
+export function KitReviews({ drafts, approvedKits }: {
+  drafts: readonly KitDraft[];
+  approvedKits: readonly Kit[];
+}) {
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const pending = drafts.filter((item) => item.state === "pending");
 
   function review(event: FormEvent<HTMLFormElement>, draft: KitDraft) {
     event.preventDefault();
+    setNotice("");
+    setError("");
     const reject = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "reject";
     const note = String(new FormData(event.currentTarget).get("note") ?? "").trim();
-    if (reject && !note) { setNotice("Enter a review note before rejecting the Kit Draft."); return; }
+    if (reject && !note) { setError("Enter a review note before rejecting the Kit Draft."); return; }
     updatePreview((state) => ({
       ...state,
       drafts: state.drafts.map((item) => item === draft ? { ...item, state: reject ? "rejected" : "approved", note } : item),
@@ -175,16 +186,23 @@ export function KitReviews({ drafts }: { drafts: KitDraft[] }) {
   return <>
     <header className={styles.pageHeading}><div><h1>Kit Draft reviews</h1><p>Review proposed Teaching Kit versions before making them available.</p></div></header>
     <p role="status">{notice}</p>
+    <p role="alert" className={styles.error}>{error}</p>
     {pending.length === 0 && <p className={styles.panel}>No Kit Drafts are waiting for review.</p>}
-    <div className={styles.stack}>{pending.map((draft) => <form key={draft.id} className={`${styles.panel} ${styles.stack}`} onSubmit={(e) => review(e, draft)}>
+    <div className={styles.stack}>{pending.map((draft) => {
+      const approved = approvedKits.find((kit) => kit.id === draft.id);
+      const approvedVersion = approved?.revision ?? approved?.id ?? "";
+      const isStale = approvedVersion !== draft.base;
+      return <form key={`${draft.id}-${draft.author}`} className={`${styles.panel} ${styles.stack}`} onSubmit={(e) => review(e, draft)}>
       <span className={styles.badge} data-status="pending">Pending review</span><h2>{draft.title}</h2>
       <small>{draft.course} · {academicTerm(draft.year, draft.term)}</small>
       <p className={styles.materialBody}>{draft.body}</p>
       {draft.link && validMaterialLink(draft.link) && <a href={draft.link} target="_blank" rel="noreferrer">Review linked material in a new tab</a>}
       {draft.pdf && <small>Sample attachment: {draft.pdf}</small>}
-      {draft.base && <Link href={`/portal/kits/${draft.id}`}>Compare with the approved Teaching Kit</Link>}
+      {isStale && <p><strong>Older version.</strong> Approving this Kit Draft will replace the current approved version.</p>}
+      {approved && <Link href={`/portal/kits/${draft.id}`}>Compare with the approved Teaching Kit</Link>}
       <label className={styles.field}>Review note (required for rejection)<textarea name="note" maxLength={1000} rows={2} /></label>
       <div className={styles.flex}><button className={styles.button} value="approve">Approve Kit Draft</button><button className={styles.secondary} value="reject">Reject Kit Draft</button></div>
-    </form>)}</div>
+      </form>;
+    })}</div>
   </>;
 }
