@@ -37,13 +37,20 @@ export async function getMySettings(db: PortalDb, actor: PortalActor): Promise<P
 export async function saveMyCampus(db: PortalDb, actor: PortalActor, raw: unknown): Promise<PortalResult> {
   const parsed = campusInput.safeParse(raw);
   if (!parsed.success || !(await loadCampus(db, parsed.data.campusId))) return portalFail(400, "Choose a Campus from the list");
-  const result = await db.update(peerAdvisers).set({ campusId: parsed.data.campusId }).where(own(actor));
-  return result.meta.changes ? OK : ONLY_PEER_ADVISERS;
+  try {
+    const result = await db.update(peerAdvisers).set({ campusId: parsed.data.campusId }).where(own(actor));
+    return result.meta.changes ? OK : ONLY_PEER_ADVISERS;
+  } catch (error) {
+    // The Campus was removed after the check above.
+    if (constraintFailed(error, "FOREIGN KEY")) return portalFail(400, "Choose a Campus from the list");
+    throw error;
+  }
 }
 
 /**
  * Replaces some of the Session User's rows in one batch. The inserts reference the
- * `peer_advisers` row, so a User revoked meanwhile fails on the foreign key.
+ * `peer_advisers` row, so a User revoked meanwhile fails on the foreign key. A Course
+ * merged or deleted meanwhile fails on it too; the User is still a Peer Adviser then.
  */
 async function replaceOwnRows(db: PortalDb, actor: PortalActor, statements: (userId: string) => Parameters<PortalDb["batch"]>[0]) {
   const [row] = await db.select({ userId: peerAdvisers.userId }).from(peerAdvisers).where(own(actor)).limit(1);
@@ -51,8 +58,9 @@ async function replaceOwnRows(db: PortalDb, actor: PortalActor, statements: (use
   try {
     await db.batch(statements(row.userId));
   } catch (error) {
-    if (constraintFailed(error, "FOREIGN KEY")) return ONLY_PEER_ADVISERS;
-    throw error;
+    if (!constraintFailed(error, "FOREIGN KEY")) throw error;
+    const [still] = await db.select({ userId: peerAdvisers.userId }).from(peerAdvisers).where(own(actor)).limit(1);
+    return still ? portalFail(409, "The Course list changed while you were saving; reload and try again") : ONLY_PEER_ADVISERS;
   }
   return OK;
 }

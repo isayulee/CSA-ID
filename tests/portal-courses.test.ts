@@ -38,7 +38,7 @@ const signIn = async (id: string) => {
 };
 const taught = async (id: string) => (await t.db.select().from(peerAdviserCourses).where(eq(peerAdviserCourses.userId, id))).map((r) => r.courseCode).sort();
 const availability = async (id: string) => (await t.db.select().from(peerAdviserAvailability).where(eq(peerAdviserAvailability.userId, id))).map((r) => `${r.weekday}-${r.hour}`).sort();
-const audit = (action: string) => t.db.select().from(adminAuditLog).where(eq(adminAuditLog.action, action as "add_campus"));
+const audit = (action: typeof adminAuditLog.$inferSelect.action) => t.db.select().from(adminAuditLog).where(eq(adminAuditLog.action, action));
 
 beforeAll(async () => {
   t = await createTestDb();
@@ -78,6 +78,14 @@ describe("Course list", () => {
     const list = await (await courseRoute.GET(get("/api/portal/courses"))).json() as { courses: { code: string }[] };
     expect(list.courses.map((c) => c.code)).toEqual(["CHM11-3L", "CS210", "MATH146"]);
     expect(await (await campusRoute.GET(get("/api/portal/campuses"))).json()).toEqual({ campuses: [{ id: "intramuros", name: "Intramuros" }, { id: "makati", name: "Makati" }] });
+  });
+
+  it("lets an Administrator who isn't a Peer Adviser add a Course too, unaudited like a Peer Adviser's", async () => {
+    await signIn("admin");
+    expect((await courseRoute.POST(post("/api/portal/courses", { code: "eng 101", title: "English" }))).status).toBe(200);
+    const [row] = await t.db.select().from(courses).where(eq(courses.code, "ENG101"));
+    expect(row.createdByUserId).toBe("admin");
+    expect(await t.db.select().from(adminAuditLog)).toEqual([]);
   });
 });
 
@@ -152,6 +160,13 @@ describe("Administrator Course and Campus endpoints", () => {
     expect((await updateCourse.POST(post("/api/admin/courses/update", { code: "PHYS141-0", newCode: "CS210", title: "x" }))).status).toBe(409);
     expect((await updateCourse.POST(post("/api/admin/courses/update", { code: "GONE1", newCode: "GONE2", title: "x" }))).status).toBe(404);
     expect(await audit("update_course")).toHaveLength(1);
+  });
+
+  it("edit only a Course's title, audited", async () => {
+    await signIn("admin");
+    expect((await updateCourse.POST(post("/api/admin/courses/update", { code: "PHYS141-0", newCode: "PHYS141-0", title: "Physics 1" }))).status).toBe(200);
+    expect(await t.db.select({ title: courses.title }).from(courses).where(eq(courses.code, "PHYS141-0"))).toEqual([{ title: "Physics 1" }]);
+    expect(await audit("update_course")).toEqual([expect.anything(), expect.objectContaining({ targetId: "PHYS141-0", targetLabel: "PHYS141-0: Physics 1" })]);
   });
 
   it("merge a duplicate into another Course, re-pointing every reference, with a required reason", async () => {
