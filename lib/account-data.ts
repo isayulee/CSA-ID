@@ -14,7 +14,7 @@ export async function exportAccount(db: Db, userId: string, now = new Date()) {
   return {
     exportedAt: now.toISOString(),
     account: user,
-    profile: { slug: profile.slug, status: profile.status, displayName: profile.displayName, role: profile.role, bio: profile.bio, accentColor: profile.accentColor, appearance: profile.appearance, evaluationUrl: profile.evaluationUrl, studentNumber: profile.studentNumber, showStudentNumber: profile.showStudentNumber, createdAt: profile.createdAt, updatedAt: profile.updatedAt },
+    profile: { slug: profile.slug, status: profile.status, displayName: profile.displayName, roleTitle: profile.roleTitle, bio: profile.bio, accentColor: profile.accentColor, iconColor: profile.iconColor, cardColor: profile.cardColor, cardOpacity: profile.cardOpacity, cardFrosted: profile.cardFrosted, evaluationUrl: profile.evaluationUrl, studentNumber: profile.studentNumber, showStudentNumber: profile.showStudentNumber, createdAt: profile.createdAt, updatedAt: profile.updatedAt },
     socialLinks: links.map(({ service, url, displayOrder }) => ({ service, url, displayOrder })),
   };
 }

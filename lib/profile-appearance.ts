@@ -1,18 +1,27 @@
 import type { CSSProperties } from "react";
 
+/** The card style. A Profile stores it as four columns that are all set or all null. */
 export type ProfileAppearance = {
   iconColor: string;
   cardColor: string;
   cardOpacity: number;
-  frosted: boolean;
+  cardFrosted: boolean;
 };
 
 export const defaultAppearance: ProfileAppearance = {
   iconColor: "#78121A",
   cardColor: "#FFFDF8",
   cardOpacity: 100,
-  frosted: false,
+  cardFrosted: false,
 };
+
+type AppearanceColumns = { [Column in keyof ProfileAppearance]: ProfileAppearance[Column] | null };
+
+/** The card style of a Profile or Published Profile row; null means the theme default. */
+export function appearanceOf({ iconColor, cardColor, cardOpacity, cardFrosted }: AppearanceColumns): ProfileAppearance | null {
+  if (iconColor === null || cardColor === null || cardOpacity === null || cardFrosted === null) return null;
+  return { iconColor, cardColor, cardOpacity, cardFrosted };
+}
 
 function luminance(channels: number[], opacity = 1, background = 0) {
   return channels.reduce((total, channel, index) => {
@@ -36,7 +45,7 @@ export function profileAccentStyle(color: string): CSSProperties {
 export function profileAppearanceStyle(appearance?: ProfileAppearance | null): CSSProperties {
   if (!appearance) return {};
 
-  const { cardColor, cardOpacity, iconColor, frosted } = appearance;
+  const { cardColor, cardOpacity, iconColor, cardFrosted } = appearance;
   const channels = colorChannels(cardColor);
   let effectiveOpacity = cardOpacity;
   let ink = "#000000";
@@ -55,7 +64,7 @@ export function profileAppearanceStyle(appearance?: ProfileAppearance | null): C
   return {
     "--profile-card-fill": `rgb(${channels.join(" ")} / ${effectiveOpacity / 100})`,
     "--profile-card-ink": ink,
-    "--profile-card-blur": frosted ? "blur(18px)" : "none",
+    "--profile-card-blur": cardFrosted ? "blur(18px)" : "none",
     "--profile-icon-color": iconColor,
   } as CSSProperties;
 }

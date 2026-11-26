@@ -12,16 +12,16 @@ const color = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
 export const profileInput = z.object({
   displayName: z.string().trim().min(1).max(128),
-  role: z.string().trim().min(1).max(128),
+  roleTitle: z.string().trim().min(1).max(128),
   bio: z.string().trim().max(500),
   accentColor: color,
   appearance: z.object({
     iconColor: color,
     cardColor: color,
     cardOpacity: z.number().int().min(70).max(100),
-    frosted: z.boolean(),
+    cardFrosted: z.boolean(),
   }).nullable().optional(),
-  evaluationUrl: z.string().url().max(500).or(z.literal("")),
+  evaluationUrl: z.string().url().max(500).startsWith("https://", "Use an HTTPS address for the evaluation form").or(z.literal("")),
   studentNumber: z.string().trim().max(32).regex(/^\d*$/, "Enter a student number using digits only").optional(),
   showStudentNumber: z.boolean().optional(),
   links: z.array(socialLink).max(8).superRefine((links, context) => {

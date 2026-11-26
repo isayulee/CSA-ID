@@ -18,7 +18,7 @@ Preconditions: baseline; a published slug (see `publish.md`); no report sent fro
 
 - **Open.** Navigate to `$BASE/id/<slug>`, `find "Report this profile"`, click it. Heading **"Report this profile"** appears.
 - **Send.** Pick a reason in the **Reason** combobox, type at least five characters into the **Details** textbox, click **"Send report"**. `status` reads `Report sent. Thank you for helping keep profiles safe.`
-- **Stored.** `bin/d1.sh "SELECT reason,details,status FROM abuse_reports ORDER BY created_at DESC LIMIT 1"` shows the report with status `open`.
+- **Stored.** `bin/d1.sh "SELECT slug,reason,details,status FROM abuse_reports ORDER BY created_at DESC LIMIT 1"` shows the report with its Slug and status `open`.
 - **Rate limit.** Send again at once. `status` reads `Please wait before sending another report`.
 
 ## Gotchas

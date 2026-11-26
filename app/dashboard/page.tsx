@@ -6,6 +6,7 @@ import { getCurrentAccount } from "@/lib/auth/current-user";
 import { isAdministrator } from "@/lib/admin";
 import { getBindings } from "@/lib/cloudflare";
 import { getDb } from "@/lib/db";
+import { appearanceOf } from "@/lib/profile-appearance";
 import { readProfileEditor } from "@/lib/profile-data";
 
 export default async function DashboardPage() {
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
       <DashboardEditor
         initial={{
           user: { name: user.name, email: user.email },
-          profile: editor.profile,
+          profile: { ...editor.profile, appearance: appearanceOf(editor.profile) },
           links: editor.links.map(({ service, url }) => ({ service, url })),
           hasUnpublishedChanges: editor.hasUnpublishedChanges,
           canReviewReports: isAdministrator(user, ADMIN_GOOGLE_SUBS),
