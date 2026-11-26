@@ -13,6 +13,8 @@ let current: { user: { id: string }; profile: { id: string } } | null = null;
 
 vi.mock("@/lib/db", () => ({ getDb: () => t.db }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentAccount: async () => current }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ host: "localhost", "x-forwarded-proto": "http" }) }));
+vi.mock("@/lib/cloudflare", () => ({ getBindings: () => ({}) }));
 
 const ORIGIN = "http://localhost";
 const A = { user: { id: "" }, profile: { id: "" } };
@@ -232,4 +234,12 @@ it("reads unpublished changes only for the owning User", async () => {
   expect(await readProfileEditor(t.db, first.user.id)).toMatchObject({ profile: { bio: privateBio }, hasUnpublishedChanges: true });
   expect(await readProfileEditor(t.db, second.user.id)).toMatchObject({ profile: { bio: "" }, hasUnpublishedChanges: false });
   expect(await readProfileEditor(t.db, crypto.randomUUID())).toBeNull();
+
+  const { readCurrentProfileEditor } = await import("@/lib/profile-editor-data");
+  current = { user: first.user, profile: first.profile };
+  expect(await readCurrentProfileEditor()).toMatchObject({ profile: { bio: privateBio }, hasUnpublishedChanges: true });
+  current = { user: second.user, profile: second.profile };
+  expect(await readCurrentProfileEditor()).toMatchObject({ profile: { bio: "" }, hasUnpublishedChanges: false });
+  current = null;
+  expect(await readCurrentProfileEditor()).toBeNull();
 });

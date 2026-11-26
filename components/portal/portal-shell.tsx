@@ -16,7 +16,6 @@ const navigation = [
 
 const administration = [
   { area: "peer-advisers", href: "/admin/peer-advisers", label: "Peer Adviser approvals" },
-  { area: "assignments", href: "/admin/assignments", label: "Advising Request assignments" },
   { area: "kit-drafts", href: "/admin/kit-drafts", label: "Kit Draft reviews" },
 ] as const;
 

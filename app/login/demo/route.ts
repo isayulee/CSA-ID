@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   const [profile] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, user.id)).limit(1);
   if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId: user.id, displayName: "Alex Santos", roleTitle: "Peer Adviser", bio: "Peer Adviser for tutoring sessions at the Center for Student Advising." });
   const token = await createSession(db, user.id);
-  const response = NextResponse.redirect(new URL("/dashboard", request.url));
+  const destination = new URL(request.url).searchParams.get("screen") === "profile" ? "/portal/profile" : "/dashboard";
+  const response = NextResponse.redirect(new URL(destination, request.url));
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
   return response;
 }
