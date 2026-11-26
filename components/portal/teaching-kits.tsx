@@ -3,21 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { academicTerm, courses, peerId, updatePreview, type Kit, type KitDraft, type PreviewState } from "./model";
+import { academicTerm, peerId, updatePreview, type Course, type Kit, type KitDraft } from "./model";
 import styles from "./portal.module.css";
 
 const allowedLinkHosts = ["drive.google.com", "docs.google.com", "www.youtube.com", "youtu.be"];
-function validMaterialLink(value: string) {
+export function validMaterialLink(value: string) {
   try {
     const url = new URL(value);
     return url.protocol === "https:" && !url.username && !url.password && allowedLinkHosts.includes(url.hostname);
   } catch { return false; }
 }
 
-function KitDraftDialog({ kit, draft, availableCourses }: {
+export function KitDraftDialog({ kit, draft, availableCourses }: {
   kit?: Kit;
   draft?: KitDraft;
-  availableCourses: typeof courses;
+  availableCourses: readonly Course[];
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const router = useRouter();
@@ -95,66 +95,6 @@ function KitDraftDialog({ kit, draft, availableCourses }: {
       </div>
     </form>
   </dialog>;
-}
-
-export function TeachingKits({ state, kitId, edit }: { state: PreviewState; kitId?: string; edit?: boolean }) {
-  const [course, setCourse] = useState("");
-  const [term, setTerm] = useState("");
-  const [query, setQuery] = useState("");
-  const [draftView, setDraftView] = useState(false);
-  const availableCourses = [...courses, ...(state.addedCourses ?? [])];
-  const kit = state.kits.find((item) => item.id === kitId);
-  const draft = state.drafts.find((item) => item.id === kitId && item.author === peerId && item.state === "pending");
-  const terms = [...new Set(state.kits.map((item) => academicTerm(item.year, item.term)))];
-  const visibleKits = state.kits.filter((item) =>
-    (!course || item.course === course) && (!term || academicTerm(item.year, item.term) === term) &&
-    `${item.title} ${item.course} ${item.body}`.toLowerCase().includes(query.trim().toLowerCase())
-  );
-  const ownDrafts = state.drafts.filter((item) => item.author === peerId && item.state !== "approved");
-  const isApprovedPeerAdviser = state.advisers.some((person) => person.id === peerId);
-  return <>
-    <header className={styles.pageHeading}>
-      <div><h1>{kit?.title ?? draft?.title ?? "Teaching Kits"}</h1><p>{kit ? `${kit.course} · ${academicTerm(kit.year, kit.term)}` : "Find approved study materials by Course and academic term."}</p></div>
-      {kitId && kitId !== "new" ? <Link className={styles.secondary} href="/portal/kits">All Teaching Kits</Link>
-        : isApprovedPeerAdviser && <Link className={styles.button} href="/portal/kits/new">Add a Teaching Kit</Link>}
-    </header>
-    {kit ? <article className={`${styles.panel} ${styles.stack}`}>
-      <span className={styles.badge} data-status="approved">Approved</span>
-      {kit.body && <p className={styles.materialBody}>{kit.body}</p>}
-      {kit.link && validMaterialLink(kit.link) && <a href={kit.link} target="_blank" rel="noreferrer">Open teaching material in a new tab</a>}
-      {kit.pdf && <small>Sample attachment: {kit.pdf}</small>}
-      {draft && <p>Your Kit Draft is pending review. This approved version is still available.</p>}
-      {isApprovedPeerAdviser && <div><Link className={styles.secondary} href={`/portal/kits/${kit.id}/edit`}>{draft ? "Edit Kit Draft" : "Propose changes"}</Link></div>}
-    </article> : kitId && kitId !== "new" ? (
-      <div className={styles.panel}>{draft ? <><p>This Kit Draft is pending review.</p><Link href={`/portal/kits/${draft.id}/edit`}>Edit Kit Draft</Link></> : <p>Teaching Kit unavailable.</p>}</div>
-    ) : <>
-      <div className={styles.tabs} aria-label="Teaching Kit views">
-        <button type="button" aria-pressed={!draftView} onClick={() => setDraftView(false)}>Approved Teaching Kits</button>
-        <button type="button" aria-pressed={draftView} onClick={() => setDraftView(true)}>My Kit Drafts ({ownDrafts.length})</button>
-      </div>
-      {draftView ? <div className={styles.stack}>
-        {ownDrafts.length === 0 && <p className={styles.panel}>You have no Kit Drafts.</p>}
-        {ownDrafts.map((item, index) => <article className={styles.panel} key={`${item.id}-${index}`}>
-          <span className={styles.badge} data-status={item.state}>{item.state === "pending" ? "Pending review" : "Rejected"}</span>
-          <h2>{item.title}</h2><p>{item.course} · {academicTerm(item.year, item.term)}</p>
-          {item.state === "pending" ? <Link href={`/portal/kits/${item.id}/edit`}>Edit Kit Draft</Link> : <p>Review note: {item.note}</p>}
-        </article>)}
-      </div> : <>
-        <div className={styles.filters} aria-label="Teaching Kit filters">
-          <label className={styles.field}>Search Teaching Kits<input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, Course, or topic" /></label>
-          <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{availableCourses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
-          <label className={styles.field}>Academic term<select value={term} onChange={(e) => setTerm(e.target.value)}><option value="">All terms</option>{terms.map((item) => <option key={item}>{item}</option>)}</select></label>
-        </div>
-        {visibleKits.length === 0 && <p className={styles.panel} role="status">No approved Teaching Kits match your filters.</p>}
-        <div className={`${styles.kitsGrid} ${styles.libraryGrid}`}>{visibleKits.map((item, index) => (
-          <Link key={item.id} href={`/portal/kits/${item.id}`} className={styles.kitTile} data-tone={index % 3}>
-            <span className={styles.badge}>{item.course}</span><div><h3>{item.title}</h3><small>{academicTerm(item.year, item.term)}</small></div>
-          </Link>
-        ))}</div>
-      </>}
-    </>}
-    {edit && isApprovedPeerAdviser && (kit || draft || kitId === "new") && <KitDraftDialog key={kitId} kit={kit} draft={draft} availableCourses={availableCourses} />}
-  </>;
 }
 
 export function KitReviews({ drafts, approvedKits }: {
