@@ -1,0 +1,4 @@
+# Bash scripts and the SQL they read must reach every machine with LF line endings, even with core.autocrlf.
+*.sh text eol=lf
+*.sql text eol=lf
+*.mjs text eol=lf

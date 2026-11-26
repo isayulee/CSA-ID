@@ -1,0 +1,5 @@
+# Built by build.sh from the squash's 0000. Rebuild it rather than edit it.
+cutover.sql
+# The evening's state. out/ holds the backup, which has Peer Advisers' personal data.
+out/
+.cutover.env
