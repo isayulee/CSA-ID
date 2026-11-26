@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useState, type FormEvent } from "react";
+import { rankPeerAdvisers, type HourSlot, type NoSuggestionReason } from "@/lib/matching";
 import { AvailabilityGrid } from "./people";
-import { campuses, courses, matching, peerId, sampleDay, statuses, updatePreview, weekdays, type AdvisingRequest, type PreviewState, type RequestStatus } from "./model";
+import { campuses, courses, peerId, sampleDay, statuses, updatePreview, weekdays, type AdvisingRequest, type PreviewState, type RequestStatus } from "./model";
 import styles from "./portal.module.css";
 
 const statusEntries = Object.entries(statuses);
@@ -55,6 +56,60 @@ function RequestForm({ request, administrator }: { request: AdvisingRequest; adm
   );
 }
 
+const weekdaysForMatching = [1, 2, 3, 4, 5, 6] as const;
+const hoursForMatching = [8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
+const matchingReasons: Record<NoSuggestionReason, string> = {
+  course_missing: "The Course is missing.",
+  campus_missing: "The Campus is missing.",
+  times_unclear: "The Advisee’s available times are unclear.",
+};
+
+function matchingSlots(slots: readonly string[]): HourSlot[] {
+  return slots.flatMap((slot) => {
+    const [day, start] = slot.split("-").map(Number);
+    const weekday = weekdaysForMatching[day];
+    const hour = hoursForMatching.find((hour) => hour === start);
+    return weekday && hour ? [{ weekday, hour }] : [];
+  });
+}
+
+function MatchingSuggestions({ request, state }: { request: AdvisingRequest; state: PreviewState }) {
+  const slots = matchingSlots(request.slots);
+  const advisersById = new Map(state.advisers.map((adviser) => [adviser.id, adviser]));
+  const openRequestsByAdviser = new Map<string, number>();
+  for (const item of state.requests) {
+    if (item.claimant && (item.status === "pending" || item.status === "rescheduled")) {
+      openRequestsByAdviser.set(item.claimant, (openRequestsByAdviser.get(item.claimant) ?? 0) + 1);
+    }
+  }
+  const result = rankPeerAdvisers({
+    courseCode: request.course || null,
+    campusId: request.campus || null,
+    timesUnclear: slots.length === 0,
+    slots,
+  }, state.advisers.map((adviser) => ({
+    userId: adviser.id,
+    campusId: adviser.campus,
+    courseCodes: adviser.courses,
+    availability: matchingSlots(adviser.slots),
+    claimedPendingOrRescheduledCount: openRequestsByAdviser.get(adviser.id) ?? 0,
+  })));
+
+  if (!result.ok) return <ul>{result.reasons.map((reason) => <li key={reason}>{matchingReasons[reason]}</li>)}</ul>;
+  if (result.suggestions.length === 0) return <p>No Peer Adviser teaches this Course on the requested Campus.</p>;
+  return <ol>{result.suggestions.map((suggestion) => <li key={suggestion.userId}>
+    {advisersById.get(suggestion.userId)?.name} · {suggestion.matchingSlots} overlapping {suggestion.matchingSlots === 1 ? "hour" : "hours"} · {suggestion.claimedPendingOrRescheduledCount} open
+  </li>)}</ol>;
+}
+
+function teamsChat(request: AdvisingRequest, adviserName: string) {
+  const url = new URL("https://teams.microsoft.com/l/chat/0/0");
+  const start = request.time ? ` at ${request.time} Manila time` : "";
+  url.searchParams.set("users", request.email);
+  url.searchParams.set("message", `Hi ${request.advisee}, I’m ${adviserName}, your Peer Adviser for ${request.course}. Our session is scheduled for ${request.date}${start}.`);
+  return url.href;
+}
+
 function RequestCard({ request, state, administrator, expanded }: { request: AdvisingRequest; state: PreviewState; administrator: boolean; expanded?: boolean }) {
   const mine = request.claimant === peerId;
   const canSeeDetails = administrator || mine;
@@ -62,7 +117,7 @@ function RequestCard({ request, state, administrator, expanded }: { request: Adv
   const canClaim = state.advisers.some((person) => person.id === peerId);
   const claimant = state.advisers.find((adviser) => adviser.id === request.claimant)?.name;
   const isOpen = request.status === "pending" || request.status === "rescheduled";
-  const suggestions = matching(request, state);
+  const chat = mine && claimant && request.email && request.date ? teamsChat(request, claimant) : null;
 
   return (
     <article className={`${styles.panel} ${styles.request}`} id={request.id}>
@@ -80,8 +135,7 @@ function RequestCard({ request, state, administrator, expanded }: { request: Adv
               const [day, hour] = slot.split("-").map(Number);
               return `${weekdays[day]} ${hour}:00–${hour + 1}:00`;
             }).join(", ") : "Times unclear. Confirm availability with the advisee."}</small>
-            {suggestions.length === 0 ? <p>No Matching suggestions.</p> :
-              <ol>{suggestions.map(({ adviser, overlap, open }) => <li key={adviser.id}>{adviser.name} · {overlap} overlapping {overlap === 1 ? "hour" : "hours"} · {open} open</li>)}</ol>}
+            <MatchingSuggestions request={request} state={state} />
           </div>
         </details>
       )}
@@ -94,6 +148,7 @@ function RequestCard({ request, state, administrator, expanded }: { request: Adv
         </div>
       </details>}
       <div className={styles.flex}>
+        {chat && <a className={styles.secondary} href={chat} target="_blank" rel="noreferrer">Notify on Teams</a>}
         {canClaim && !request.claimant && isOpen && !administrator && <button className={styles.button} onClick={() => updateRequest(request.id, (current) => current.claimant ? current : { ...current, claimant: peerId })}>Claim Advising Request</button>}
         {mine && isOpen && !administrator && <button className={styles.secondary} onClick={() => updateRequest(request.id, (current) => current.claimant === peerId ? { ...current, claimant: "" } : current)}>Give back</button>}
         {administrator && <form className={styles.flex} onSubmit={(event) => {
@@ -171,6 +226,7 @@ export function Scheduler({ state, administrator, requestId }: { state: PreviewS
   const [campus, setCampus] = useState("");
   const [status, setStatus] = useState("");
   const [claimant, setClaimant] = useState("");
+  const availableCourses = [...courses, ...(state.addedCourses ?? [])];
   const requests = state.requests.filter((request) =>
     (!course || request.course === course) && (!campus || request.campus === campus) &&
     (!status || request.status === status) && (!claimant || request.claimant === (claimant === "unclaimed" ? "" : claimant)) &&
@@ -187,7 +243,7 @@ export function Scheduler({ state, administrator, requestId }: { state: PreviewS
       {views.map((item) => <button type="button" key={item} aria-pressed={view === item} onClick={() => setView(item)}>{item}</button>)}
     </div>}
     <div className={`${styles.filters} ${styles.schedulerFilters}`} aria-label="Advising Request filters">
-      <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{courses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
+      <label className={styles.field}>Course<select value={course} onChange={(e) => setCourse(e.target.value)}><option value="">All Courses</option>{availableCourses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.title}</option>)}</select></label>
       <label className={styles.field}>Campus<select value={campus} onChange={(e) => setCampus(e.target.value)}><option value="">All Campuses</option>{campuses.map((item) => <option key={item}>{item}</option>)}</select></label>
       <label className={styles.field}>Status<select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{statusEntries.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
       <label className={styles.field}>Claimant<select value={claimant} onChange={(e) => setClaimant(e.target.value)}><option value="">Anyone</option><option value="unclaimed">Unclaimed</option>{state.advisers.map((item) => <option key={item.id} value={item.id}>{!administrator && item.id === peerId ? "My Advising Requests" : item.name}</option>)}</select></label>

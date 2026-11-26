@@ -98,13 +98,3 @@ export function updatePreview(update: (state: PreviewState) => PreviewState) {
 export function academicTerm(year: number, term: number) {
   return `Term ${term} · AY ${year}–${year + 1}`;
 }
-export function matching(request: AdvisingRequest, state: PreviewState) {
-  if (!request.slots.length) return [];
-  return state.advisers.filter((adviser) => adviser.campus === request.campus && adviser.courses.includes(request.course))
-    .map((adviser) => ({
-      adviser,
-      overlap: request.slots.filter((slot) => adviser.slots.includes(slot)).length,
-      open: state.requests.filter((item) => item.claimant === adviser.id && ["pending", "rescheduled"].includes(item.status)).length,
-    }))
-    .sort((a, b) => b.overlap - a.overlap || a.open - b.open);
-}
