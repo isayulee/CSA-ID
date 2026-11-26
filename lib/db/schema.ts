@@ -1,5 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /**
  * The schema in agent_technical_readme.md §6 and §14.3. migrations/0000 is
@@ -423,6 +423,91 @@ export const advisingNotes = sqliteTable("advising_notes", {
 }, (table) => [
   index("advising_notes_request_idx").on(table.requestId, table.createdAt),
   check("advising_notes_body_check", sql`length(${table.body}) between 1 and 2000`),
+]);
+
+// Projects and Tasks (§15.3). Default Projects derive their members from peer_advisers, so only
+// custom Projects have project_members rows. migrations/0002 seeds the three default Projects.
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey(),
+  defaultKey: text("default_key", { enum: ["peer_advisers", "student_assistants", "officers"] }).unique(),
+  name: text("name").notNull(),
+  archivedAt: integer("archived_at"),
+  createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("created_at").notNull().default(unixNow),
+  updatedAt: integer("updated_at").notNull().default(unixNow),
+}, (table) => [
+  check("projects_default_key_check", nullOr(table.defaultKey, sql`${table.defaultKey} in ('peer_advisers', 'student_assistants', 'officers')`)),
+  check("projects_name_check", sql`length(${table.name}) between 1 and 64`),
+  check("projects_default_not_archived_check", sql`${table.defaultKey} is null or ${table.archivedAt} is null`),
+]);
+
+export const projectMembers = sqliteTable("project_members", {
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  addedAt: integer("added_at").notNull().default(unixNow),
+}, (table) => [
+  primaryKey({ columns: [table.projectId, table.userId] }),
+  index("project_members_user_idx").on(table.userId),
+]);
+
+// board_type has no check: more types will come, and changing a check rebuilds the table.
+export const boards = sqliteTable("boards", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  boardType: text("board_type").notNull().default("kanban"),
+  position: integer("position").notNull(),
+  archivedAt: integer("archived_at"),
+  createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("created_at").notNull().default(unixNow),
+  updatedAt: integer("updated_at").notNull().default(unixNow),
+}, (table) => [
+  index("boards_project_idx").on(table.projectId, table.position),
+  check("boards_name_check", sql`length(${table.name}) between 1 and 64`),
+]);
+
+export const boardColumns = sqliteTable("board_columns", {
+  id: text("id").primaryKey(),
+  boardId: text("board_id").notNull().references(() => boards.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  position: integer("position").notNull(),
+  isDone: integer("is_done", { mode: "boolean" }).notNull().default(false),
+}, (table) => [
+  uniqueIndex("board_columns_board_id_id_idx").on(table.boardId, table.id), // target of the tasks composite key
+  index("board_columns_board_idx").on(table.boardId, table.position),
+  uniqueIndex("board_columns_one_done").on(table.boardId).where(sql`${table.isDone} = 1`),
+  check("board_columns_name_check", sql`length(${table.name}) between 1 and 32`),
+  check("board_columns_is_done_check", sql`${table.isDone} in (0, 1)`),
+]);
+
+export const tasks = sqliteTable("tasks", {
+  id: text("id").primaryKey(),
+  boardId: text("board_id").notNull().references(() => boards.id, { onDelete: "cascade" }),
+  columnId: text("column_id").notNull(),
+  position: integer("position").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  dueOn: text("due_on"),
+  version: integer("version").notNull().default(1), // §15.5
+  createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  updatedByUserId: text("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("created_at").notNull().default(unixNow),
+  updatedAt: integer("updated_at").notNull().default(unixNow),
+}, (table) => [
+  // Keeps a Task's Column on the Task's own Board, and refuses deleting a Column that holds Tasks.
+  foreignKey({ columns: [table.boardId, table.columnId], foreignColumns: [boardColumns.boardId, boardColumns.id] }).onDelete("restrict"),
+  index("tasks_column_idx").on(table.columnId, table.position),
+  check("tasks_title_check", sql`length(${table.title}) between 1 and 200`),
+  check("tasks_description_check", sql`length(${table.description}) <= 4000`),
+  check("tasks_due_on_check", nullOr(table.dueOn, isDate(table.dueOn))),
+]);
+
+export const taskAssignees = sqliteTable("task_assignees", {
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+}, (table) => [
+  primaryKey({ columns: [table.taskId, table.userId] }),
+  index("task_assignees_user_idx").on(table.userId), // My Tasks
 ]);
 
 export type AdminAuditAction = typeof adminAuditLog.$inferInsert["action"];
