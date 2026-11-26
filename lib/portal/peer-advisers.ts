@@ -9,10 +9,16 @@ import { constraintFailed } from "./batch";
 
 const userId = z.string().min(1).max(64);
 const campusId = z.string().min(2).max(32);
+const reason = z.string().trim().min(1).max(1000);
 
 export const approveInput = z.object({ userId, campusId });
-export const revokeInput = z.object({ userId, reason: z.string().trim().min(1).max(1000) });
+export const revokeInput = z.object({ userId, reason });
 export const campusInput = z.object({ userId, campusId });
+// Clearing the flag needs a reason (§14.2); granting it takes none.
+export const studentAssistantInput = z.discriminatedUnion("studentAssistant", [
+  z.object({ userId, studentAssistant: z.literal(true) }),
+  z.object({ userId, studentAssistant: z.literal(false), reason }),
+]);
 
 const UNAUTHORIZED = portalFail(401, "Unauthorized");
 const NOT_A_PEER_ADVISER = portalFail(404, "This User is not a Peer Adviser");
@@ -127,6 +133,28 @@ export async function updatePeerAdviserOfficer({ db, adminSubs }: PortalAdminDep
     db.insert(adminAuditLog).select(db.select(auditColumns({ actorGoogleSub: actor.googleSub, action: "update_peer_adviser", targetType: "user", targetId: target.userId, targetLabel: `${target.email} · ${label}` }))
       .from(peerAdvisers).where(changesOfficer)),
     db.update(peerAdvisers).set({ officerPosition, officerOrder }).where(changesOfficer),
+  ]);
+  return OK;
+}
+
+/**
+ * Sets or clears a Peer Adviser's Student Assistant flag (§15), with its audit
+ * entry in the same batch. Both statements are conditional on the flag
+ * changing, so a repeat or racing request writes nothing.
+ */
+export async function setStudentAssistant({ db, adminSubs }: PortalAdminDeps, actor: Actor, raw: unknown): Promise<PortalResult> {
+  if (!isAdministrator(actor, adminSubs)) return UNAUTHORIZED;
+  const parsed = studentAssistantInput.safeParse(raw);
+  if (!parsed.success) return portalFail(400, "Choose a Peer Adviser, and give a reason of 1 to 1000 characters to clear Student Assistant");
+  const target = await loadPeerAdviser(db, parsed.data.userId);
+  if (!target) return NOT_A_PEER_ADVISER;
+  const { studentAssistant } = parsed.data;
+  const auditReason = "reason" in parsed.data ? parsed.data.reason : null;
+  const changesFlag = and(peerAdviserRow(target.userId), ne(peerAdvisers.studentAssistant, studentAssistant));
+  await db.batch([
+    db.insert(adminAuditLog).select(db.select(auditColumns({ actorGoogleSub: actor.googleSub, action: "update_peer_adviser", targetType: "user", targetId: target.userId, targetLabel: `Student Assistant: ${studentAssistant ? "on" : "off"}`, reason: auditReason }))
+      .from(peerAdvisers).where(changesFlag)),
+    db.update(peerAdvisers).set({ studentAssistant }).where(changesFlag),
   ]);
   return OK;
 }
