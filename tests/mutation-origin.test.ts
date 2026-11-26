@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ publish: vi.fn(), unpublish: vi.fn(), purge: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({
-  getCurrentAccount: async () => ({ user: { id: "u1" }, profile: { id: "p1", slug: "someone", displayName: "Someone", role: "Student assistant", evaluationUrl: "https://forms.example/e", status: "published", avatarKey: null, backgroundKey: null } }),
+  getCurrentAccount: async () => ({ user: { id: "u1" }, profile: { id: "p1", slug: "someone", displayName: "Someone", roleTitle: "Peer Adviser", evaluationUrl: "https://forms.example/e", status: "published", avatarKey: null, backgroundKey: null } }),
 }));
 vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
 vi.mock("@/lib/cloudflare", () => ({ getBindings: () => ({}) }));

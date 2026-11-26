@@ -28,7 +28,7 @@ export type DashboardData = {
   canReviewReports: boolean;
   profileOrigin: string;
   user: { name: string; email: string };
-  profile: { displayName: string; role: string; bio: string; slug: string | null; accentColor: string; appearance: ProfileAppearance | null; evaluationUrl: string | null; studentNumber: string | null; showStudentNumber: boolean; status: string; avatarKey: string | null; backgroundKey: string | null };
+  profile: { displayName: string; roleTitle: string; bio: string; slug: string | null; accentColor: string; appearance: ProfileAppearance | null; evaluationUrl: string | null; studentNumber: string | null; showStudentNumber: boolean; status: string; avatarKey: string | null; backgroundKey: string | null };
   links: Array<{ service: string; url: string }>;
 };
 
@@ -38,7 +38,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const [copyNotice, setCopyNotice] = useState("");
   const [section, setSection] = useState<(typeof sections)[number]>("Details");
   const [name, setName] = useState(initial.profile.displayName);
-  const [role, setRole] = useState(initial.profile.role);
+  const [roleTitle, setRoleTitle] = useState(initial.profile.roleTitle);
   const [bio, setBio] = useState(initial.profile.bio);
   const [slug, setSlug] = useState(initial.profile.slug || "");
   const [claimedSlug, setClaimedSlug] = useState(initial.profile.slug);
@@ -47,7 +47,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const [color, setColor] = useState(initial.profile.accentColor);
   const [colorText, setColorText] = useState(initial.profile.accentColor);
   const [appearance, setAppearance] = useState(initial.profile.appearance);
-  const { iconColor, cardColor, cardOpacity, frosted } = appearance ?? defaultAppearance;
+  const { iconColor, cardColor, cardOpacity, cardFrosted } = appearance ?? defaultAppearance;
   const [evaluationUrl, setEvaluationUrl] = useState(initial.profile.evaluationUrl || "");
   const [studentNumber, setStudentNumber] = useState(initial.profile.studentNumber || "");
   const [showStudentNumber, setShowStudentNumber] = useState(initial.profile.showStudentNumber);
@@ -61,7 +61,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
   const avatarInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
 
-  const payload = () => ({ displayName: name, role, bio, accentColor: color, appearance, evaluationUrl, studentNumber, showStudentNumber, links });
+  const payload = () => ({ displayName: name, roleTitle, bio, accentColor: color, appearance, evaluationUrl, studentNumber, showStudentNumber, links });
 
   async function copyPermanentUrl() {
     try {
@@ -165,7 +165,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
           {section === "Details" && <div className="formStack">
             <div className="uploadRow"><div className="avatar avatarSmall" style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}>{avatarUrl ? "" : name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><div><input ref={avatarInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload("avatar", event.target)} /><button className={styles.secondary} type="button" onClick={() => avatarInput.current?.click()}>Choose photo</button><p>JPEG, PNG, or WebP. Up to 2 MB.</p></div></div>
             <label className="field">Display name<input value={name} maxLength={128} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="field">Role or title<input value={role} maxLength={128} onChange={(event) => setRole(event.target.value)} /></label>
+            <label className="field">Role or title<input value={roleTitle} maxLength={128} onChange={(event) => setRoleTitle(event.target.value)} /></label>
             <label className="field">Short bio<textarea value={bio} maxLength={500} rows={4} onChange={(event) => setBio(event.target.value)} /><span>{bio.length}/500</span></label>
             <label className="field">Evaluation form URL<input type="url" value={evaluationUrl} placeholder="CSA evaluation form" onChange={(event) => setEvaluationUrl(event.target.value)} /><small>Leave blank to use the CSA evaluation form.</small></label>
             <div className="studentNumberSettings">
@@ -233,9 +233,9 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
                 <input id="profile-card-opacity" type="range" min={70} max={100} value={cardOpacity} aria-valuetext={`${cardOpacity}%`} onChange={(event) => setAppearance({ ...defaultAppearance, ...appearance, cardOpacity: event.target.valueAsNumber })} />
               </label>
               <label className="appearanceFrost">
-                <input type="checkbox" checked={frosted} onChange={(event) => {
+                <input type="checkbox" checked={cardFrosted} onChange={(event) => {
                   const checked = event.target.checked;
-                  setAppearance({ ...defaultAppearance, ...appearance, frosted: checked, cardOpacity: checked && cardOpacity === 100 ? 78 : cardOpacity });
+                  setAppearance({ ...defaultAppearance, ...appearance, cardFrosted: checked, cardOpacity: checked && cardOpacity === 100 ? 78 : cardOpacity });
                 }} />
                 <span>Frosted glass<small>Blurs the background behind the card.</small></span>
               </label>
@@ -258,7 +258,7 @@ export function DashboardEditor({ initial }: { initial: DashboardData }) {
               </Link>
             )}
           </div>
-          <div className="phoneFrame"><div className="phoneTop"><span /></div><ProfileCard compact name={name || "Your name"} role={role} bio={bio} studentNumber={showStudentNumber ? studentNumber.trim() : undefined} primary={color} avatarUrl={avatarUrl} coverUrl={backgroundUrl} appearance={appearance} socialLinks={links.filter((link) => link.url.trim()).map(({ service }) => ({ service, label: labels[service] }))} /></div>
+          <div className="phoneFrame"><div className="phoneTop"><span /></div><ProfileCard compact name={name || "Your name"} roleTitle={roleTitle} bio={bio} studentNumber={showStudentNumber ? studentNumber.trim() : undefined} primary={color} avatarUrl={avatarUrl} coverUrl={backgroundUrl} appearance={appearance} socialLinks={links.filter((link) => link.url.trim()).map(({ service }) => ({ service, label: labels[service] }))} /></div>
         </aside>
       </div>
       <footer className={styles.profileFooter} aria-label="Profile actions">

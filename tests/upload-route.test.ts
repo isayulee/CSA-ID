@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { profiles, publishedProfiles, users } from "@/lib/db/schema";
+import { profiles, publishedProfiles, reservedSlugs, users } from "@/lib/db/schema";
 import { createTestDb, multipartRequest } from "./helpers";
 
 const state = vi.hoisted(() => ({ bindings: {} as Record<string, unknown>, db: null as unknown, account: null as unknown }));
@@ -76,7 +76,8 @@ describe("POST /api/uploads/[kind]", () => {
   it("keeps the replaced key while the published profile still uses it", async () => {
     const old = `img/${PROFILE}/background/bbbb.webp`;
     await seed("backgroundKey", old);
-    await testDb.db.insert(publishedProfiles).values({ profileId: PROFILE, slug: "a", displayName: "A", role: "r", bio: "", accentColor: "#B5121B", backgroundKey: old, evaluationUrl: "" });
+    await testDb.db.insert(reservedSlugs).values({ slug: "upload-owner" }).onConflictDoNothing();
+    await testDb.db.insert(publishedProfiles).values({ profileId: PROFILE, slug: "upload-owner", displayName: "A", roleTitle: "r", bio: "", accentColor: "#B5121B", backgroundKey: old, evaluationUrl: "https://forms.example/e" });
     await upload("background", jpeg);
     expect(await kv.get(old)).not.toBeNull();
   });

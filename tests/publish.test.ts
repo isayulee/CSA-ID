@@ -3,17 +3,18 @@ import { and, eq } from "drizzle-orm";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
 import { unpublish } from "@/lib/profile-lifecycle";
 import { profileCacheKey, withProfileEdgeCache } from "@/lib/edge-cache";
-import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, users } from "@/lib/db/schema";
+import { draftSocialLinks, profiles, publishedProfiles, publishedSocialLinks, reservedSlugs, users } from "@/lib/db/schema";
 import { createTestDb } from "./helpers";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 let t: TestDb;
 
 async function seed(id: string, slug: string, status: "draft" | "published" | "suspended", snapshot: boolean) {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test` });
-  await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug, displayName: id, role: "Student assistant", evaluationUrl: "https://forms.example/e", status });
+  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `sub-${id}`, email: `${id}@example.test`, name: id });
+  await t.db.insert(reservedSlugs).values({ slug });
+  await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug, displayName: id, roleTitle: "Peer Adviser", evaluationUrl: "https://forms.example/e", status });
   if (snapshot) {
-    await t.db.insert(publishedProfiles).values({ profileId: id, slug, displayName: id, role: "Student assistant", bio: "", accentColor: "#B5121B", evaluationUrl: "https://forms.example/e" });
+    await t.db.insert(publishedProfiles).values({ profileId: id, slug, displayName: id, roleTitle: "Peer Adviser", bio: "", accentColor: "#B5121B", evaluationUrl: "https://forms.example/e" });
     await t.db.insert(publishedSocialLinks).values({ id: `l-${id}`, profileId: id, service: "github", url: "https://github.com/x", displayOrder: 0 });
   }
 }

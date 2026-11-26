@@ -85,11 +85,12 @@ export async function submitReport(raw: unknown, ip: string | null, deps: Submit
 
   // One statement: the caps are counted and the row inserted atomically in D1, so
   // concurrent requests that slip past the eventually consistent KV check still hit these.
+  // The Slug is stored too, so the report still names the page after the account is deleted.
   const now = deps.now ?? Math.floor(Date.now() / 1000);
   const since = now - WINDOW_SECONDS;
   const result = await deps.db.run(sql`
-    INSERT INTO abuse_reports (id, profile_id, reason, details, status, created_at)
-    SELECT ${crypto.randomUUID()}, ${profileId}, ${reason}, ${details}, 'open', ${now}
+    INSERT INTO abuse_reports (id, profile_id, slug, reason, details, status, created_at)
+    SELECT ${crypto.randomUUID()}, ${profileId}, ${published.slug}, ${reason}, ${details}, 'open', ${now}
     WHERE (SELECT count(*) FROM abuse_reports WHERE profile_id = ${profileId} AND created_at > ${since}) < ${MAX_PER_PROFILE_PER_WINDOW}
       AND (SELECT count(*) FROM abuse_reports WHERE created_at > ${since}) < ${MAX_TOTAL_PER_WINDOW}`);
   if (!result.meta.changes) return fail(429, "Too many reports right now. Please try again later");

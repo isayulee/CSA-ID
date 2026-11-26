@@ -4,7 +4,7 @@ import { SocialIcon, type SocialPlatform } from "./social-icon";
 type ProfileCardProps = {
   compact?: boolean;
   name?: string;
-  role?: string;
+  roleTitle?: string;
   bio?: string;
   studentNumber?: string;
   primary?: string;
@@ -17,7 +17,7 @@ type ProfileCardProps = {
 export function ProfileCard({
   compact = false,
   name = "Alex Santos",
-  role = "Peer Adviser",
+  roleTitle = "Peer Adviser",
   bio = "Peer Adviser for tutoring sessions at the Center for Student Advising.",
   studentNumber,
   primary = "#b5121b",
@@ -33,7 +33,7 @@ export function ProfileCard({
         <div className="avatar" aria-label={`${name} profile image`} style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>{avatarUrl ? "" : name.split(" ").map((part) => part[0]).join("")}</div>
         <div className="profileIdentity">
           <p className="profileName">{name}</p>
-          <p className="profileRole">{role}</p>
+          <p className="profileRole">{roleTitle}</p>
         </div>
         {studentNumber && <p className="profileStudentNumber">Student number {studentNumber}</p>}
         <p className="profileBio">{bio}</p>

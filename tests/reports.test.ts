@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { abuseReports, profiles, publishedProfiles, users } from "@/lib/db/schema";
+import { abuseReports, profiles, publishedProfiles, reservedSlugs, users } from "@/lib/db/schema";
 import { MAX_BODY_BYTES, MAX_PER_PROFILE_PER_WINDOW, rateKeyFor, submitReport } from "@/lib/reports";
 import * as route from "@/app/api/reports/route";
 import { createTestDb } from "./helpers";
@@ -21,9 +21,10 @@ const deps = (over: object = {}) => ({ db: t.db, kv: kv(), secret: "secret", fet
 const count = async () => (await t.db.select().from(abuseReports)).length;
 
 async function seedProfile(id: string, slug: string, status: "draft" | "published" | "suspended", snapshot: boolean) {
-  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `s-${id}`, email: `${id}@example.test` });
+  await t.db.insert(users).values({ id: `u-${id}`, googleSub: `s-${id}`, email: `${id}@example.test`, name: slug });
+  await t.db.insert(reservedSlugs).values({ slug });
   await t.db.insert(profiles).values({ id, userId: `u-${id}`, slug, displayName: slug, evaluationUrl: "https://forms.example/e", status });
-  if (snapshot) await t.db.insert(publishedProfiles).values({ profileId: id, slug, displayName: slug, role: "Student assistant", bio: "", accentColor: "#B5121B", evaluationUrl: "https://forms.example/e" });
+  if (snapshot) await t.db.insert(publishedProfiles).values({ profileId: id, slug, displayName: slug, roleTitle: "Peer Adviser", bio: "", accentColor: "#B5121B", evaluationUrl: "https://forms.example/e" });
 }
 
 beforeAll(async () => {
@@ -36,12 +37,12 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 
 describe("submitReport", () => {
-  it("stores a report for a real profile and starts the rate window", async () => {
+  it("stores a report with the reported Profile and its Slug, and starts the rate window", async () => {
     const d = deps();
     const res = await submitReport(body(), "1.2.3.4", d);
     expect(res.status).toBe(201);
     const rows = await t.db.select().from(abuseReports);
-    expect(rows.at(-1)).toMatchObject({ profileId: "p1", reason: "impersonation", status: "open" });
+    expect(rows.at(-1)).toMatchObject({ profileId: "p1", slug: "ada", reason: "impersonation", status: "open" });
     expect(d.kv.map.has("report-rate/1.2.3.4")).toBe(true);
   });
 

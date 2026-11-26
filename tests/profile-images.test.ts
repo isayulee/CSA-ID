@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { adminAuditLog, profiles, publishedProfiles, users } from "@/lib/db/schema";
+import { adminAuditLog, profiles, publishedProfiles, reservedSlugs, users } from "@/lib/db/schema";
 import { UploadError } from "@/lib/images/policy";
 import { deleteAllImages, isImageKey, removeImages, replaceImage } from "@/lib/images/profile-images";
 import { createTestDb } from "./helpers";
@@ -32,7 +32,8 @@ let kv: ReturnType<typeof fakeKv>;
 
 beforeAll(async () => {
   t = await createTestDb();
-  await t.db.insert(users).values({ id: "u1", googleSub: "sub-1", email: "one@example.test" });
+  await t.db.insert(users).values({ id: "u1", googleSub: "sub-1", email: "one@example.test", name: "One" });
+  await t.db.insert(reservedSlugs).values({ slug: "one" });
   await t.db.insert(profiles).values({ id: PROFILE, userId: "u1", slug: "one", displayName: "One", evaluationUrl: "https://forms.example/e" });
 });
 afterAll(() => t.dispose());
@@ -44,7 +45,7 @@ beforeEach(async () => {
   await t.db.delete(publishedProfiles).where(eq(publishedProfiles.profileId, PROFILE));
 });
 
-const publishWith = (avatarKey: string | null) => t.db.insert(publishedProfiles).values({ profileId: PROFILE, slug: "one", displayName: "One", role: "r", bio: "", accentColor: "#B5121B", avatarKey, evaluationUrl: "https://forms.example/e" });
+const publishWith = (avatarKey: string | null) => t.db.insert(publishedProfiles).values({ profileId: PROFILE, slug: "one", displayName: "One", roleTitle: "r", bio: "", accentColor: "#B5121B", avatarKey, evaluationUrl: "https://forms.example/e" });
 const replace = async () => replaceImage({ db: t.db, kv: kv.kv, images }, { userId: "u1", profile: await draftRow() }, "avatar", jpeg);
 
 describe("replaceImage", () => {
@@ -86,7 +87,7 @@ describe("removeImages", () => {
     expect((await draftRow()).avatarKey).toBeNull();
     const [snapshot] = await t.db.select().from(publishedProfiles).where(eq(publishedProfiles.profileId, PROFILE));
     expect(snapshot.avatarKey).toBeNull();
-    expect(await t.db.select().from(adminAuditLog).where(eq(adminAuditLog.targetProfileId, PROFILE))).toMatchObject([{ action: "remove_images", reason: "abusive photo" }]);
+    expect(await t.db.select().from(adminAuditLog).where(eq(adminAuditLog.targetId, PROFILE))).toMatchObject([{ action: "remove_images", targetType: "profile", targetLabel: "one", reason: "abusive photo" }]);
   });
 
   it("keeps the keys in D1 when KV fails, so a retry finds them", async () => {

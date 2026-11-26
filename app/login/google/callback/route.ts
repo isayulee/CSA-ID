@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import * as oauth from "oauth4webapi";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { profiles, users } from "@/lib/db/schema";
+import { profiles } from "@/lib/db/schema";
 import { googleConfig, googleIssuer } from "@/lib/auth/google";
 import { createSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/session";
+import { findOrCreateUser } from "@/lib/auth/users";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -24,17 +25,11 @@ export async function GET(request: Request) {
     if (!claims?.sub || typeof claims.email !== "string" || claims.email_verified !== true) throw new Error("Google account email is not verified");
 
     const db = getDb();
-    const now = Math.floor(Date.now() / 1000);
-    const [existing] = await db.select().from(users).where(eq(users.googleSub, claims.sub)).limit(1);
-    const userId = existing?.id ?? crypto.randomUUID();
-    const name = typeof claims.name === "string" ? claims.name.slice(0, 128) : claims.email.split("@")[0];
-    const pictureUrl = typeof claims.picture === "string" ? claims.picture : null;
-    if (existing) await db.update(users).set({ email: claims.email, name, pictureUrl }).where(eq(users.id, userId));
-    else await db.insert(users).values({ id: userId, googleSub: claims.sub, email: claims.email, name, pictureUrl, createdAt: now });
-    const [profile] = await db.select().from(profiles).where(and(eq(profiles.userId, userId))).limit(1);
-    if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId, slug: null, displayName: name, role: "", bio: "", accentColor: "#B5121B", avatarKey: null, backgroundKey: null, evaluationUrl: null, status: "draft", createdAt: now, updatedAt: now });
+    const user = await findOrCreateUser(db, { sub: claims.sub, email: claims.email, name: typeof claims.name === "string" ? claims.name : undefined });
+    const [profile] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, user.id)).limit(1);
+    if (!profile) await db.insert(profiles).values({ id: crypto.randomUUID(), userId: user.id, displayName: user.name });
 
-    const token = await createSession(db, userId);
+    const token = await createSession(db, user.id);
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
     response.cookies.delete("oauth_state"); response.cookies.delete("oauth_nonce"); response.cookies.delete("oauth_verifier");

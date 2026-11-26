@@ -62,7 +62,7 @@ export async function listOpenReports(deps: AdminDeps, actor: Actor): Promise<Ad
     details: abuseReports.details,
     createdAt: abuseReports.createdAt,
     profileId: abuseReports.profileId,
-    slug: profiles.slug,
+    slug: abuseReports.slug,
     displayName: profiles.displayName,
     profileStatus: profiles.status,
   }).from(abuseReports).leftJoin(profiles, eq(profiles.id, abuseReports.profileId))

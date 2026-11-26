@@ -96,4 +96,15 @@ describe("users", () => {
     const other = await findOrCreateUser(t.db, { sub: "sub-3", email: "new@example.test" });
     expect(other.id).not.toBe(first.id);
   });
+
+  it("records the age confirmation when the account is created and keeps it on later sign-ins", async () => {
+    const created = await findOrCreateUser(t.db, { sub: "sub-4", email: "age@example.test", name: "Ana Cruz" }, T0);
+    expect(created).toMatchObject({ name: "Ana Cruz", ageConfirmedAt: T0, createdAt: T0 });
+    const later = await findOrCreateUser(t.db, { sub: "sub-4", email: "age@example.test", name: "Ana M. Cruz" }, T0 + 86_400);
+    expect(later).toMatchObject({ id: created.id, name: "Ana M. Cruz", ageConfirmedAt: T0 });
+  });
+
+  it("names a User after the email address when Google gives no name", async () => {
+    expect(await findOrCreateUser(t.db, { sub: "sub-5", email: "no.name@example.test", name: "  " })).toMatchObject({ name: "no.name" });
+  });
 });
