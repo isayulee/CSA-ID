@@ -86,8 +86,32 @@ h1, h2, h3 { letter-spacing: -.035em; line-height: 1.02; text-wrap: balance; }
 .publicProfile { min-height: 100svh; display: grid; place-items: center; padding: 70px 24px; position: relative; overflow: hidden; background: #dce9da; }.publicBackdrop { position: absolute; inset: 0; overflow: hidden; }.publicBackdrop span { position: absolute; border-radius: 50%; }.publicBackdrop span:nth-child(1) { width: 50vw; height: 50vw; background: #efb8aa; right: -17vw; top: -24vw; }.publicBackdrop span:nth-child(2) { width: 30vw; height: 30vw; background: #f3d998; left: -9vw; bottom: -16vw; }.publicBackdrop span:nth-child(3) { width: 12vw; height: 45vw; background: #246b3b; left: 18%; top: 38%; transform: rotate(35deg); border-radius: 999px; opacity: .9; }.publicCard { width: min(520px, 100%); background: rgba(255,254,249,.96); border-radius: 18px; padding: 44px; box-shadow: 0 26px 70px rgba(20,33,18,.18); position: relative; text-align: center; }.publicAvatar { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 24px; background: var(--ink); color: white; font-size: 22px; font-weight: 600; }.publicKicker { color: var(--action); font-weight: 600; margin-bottom: 8px; }.publicCard h1 { font-size: 46px; font-weight: 500; margin-bottom: 18px; }.publicBio { color: var(--muted); max-width: 390px; margin: 0 auto 28px; }.publicLinks { display: grid; gap: 9px; margin: 30px 0; }.publicLinks a { min-height: 52px; border: 1px solid var(--line); border-radius: 9px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; text-decoration: none; font-weight: 500; transition: transform .18s ease, background .18s ease; }.publicLinks a:hover { transform: translateY(-2px); background: var(--surface); }.publicSave { min-height: 50px; }.providedNotice { color: var(--muted); font-size: 12px; margin: 22px 0 7px; }.reportLink { color: var(--muted); font-size: 12px; }.profileBrand { position: absolute; bottom: 22px; text-decoration: none; font-weight: 600; font-size: 14px; }
 .simplePage { min-height: 100svh; display: grid; place-items: center; padding: 32px; }.simplePage section { width: min(560px, 100%); display: grid; gap: 22px; }.simplePage h1 { font-size: 48px; font-weight: 500; margin: 0; }.simplePage p { color: var(--muted); }.simplePage .button, .simplePage .textLink { justify-self: start; }
 
-@keyframes heroEnter { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
-[data-enter] .heroCopy, [data-enter] .heroVisual { animation: heroEnter .7s cubic-bezier(.16,1,.3,1) both; } [data-enter] .heroVisual { animation-delay: .1s; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes heroEnter {
+    from { opacity: .9; translate: 0 8px; }
+    to { opacity: 1; translate: none; }
+  }
+
+  @keyframes heroSettle {
+    from { translate: 0 var(--hero-offset); }
+    to { translate: none; }
+  }
+
+  @keyframes heroTileWave {
+    0%, 100% { translate: none; scale: 1; }
+    45% { translate: 0 -4px; scale: .92; }
+  }
+
+  [data-enter] .heroCopy { animation: heroEnter .55s cubic-bezier(.16, 1, .3, 1); }
+  [data-enter] :is(.editorWindow, .heroCard) {
+    animation: heroSettle .65s cubic-bezier(.16, 1, .3, 1) backwards;
+  }
+  [data-enter] .editorWindow { --hero-offset: 8px; }
+  [data-enter] .heroCard { --hero-offset: 14px; animation-delay: .08s; }
+  [data-enter] .heroSquares span { animation: heroTileWave 2.6s ease-in-out; }
+  [data-enter] .heroSquares span:nth-child(3n + 2) { animation-delay: 80ms; }
+  [data-enter] .heroSquares span:nth-child(3n) { animation-delay: 160ms; }
+}
 
 @media (max-width: 1080px) {
   .heroGrid { gap: 5%; }.heroVisual { min-height: 520px; }.heroCard { width: 270px; }
@@ -238,7 +262,8 @@ h1, h2, h3 { letter-spacing: -.035em; line-height: 1.02; text-wrap: balance; }
 @media (max-width: 560px) {
   .brandName small { display: none; }
   .brandLogo { width: 36px; height: 36px; }
-  .heroSquares { display: none; }
+  .heroSquares { top: 12px; left: 12px; }
+  .heroVisual .editorWindow { left: 54px; width: calc(100% - 54px); }
   .publicCsaLogo { width: 48px; height: 48px; top: 18px; right: 18px; }
   .publicSquaresPrimary { left: -8px; bottom: 18px; opacity: .9; }
   .publicSquaresSecondary { right: -30px; top: 22px; opacity: .72; transform: scale(.52); }

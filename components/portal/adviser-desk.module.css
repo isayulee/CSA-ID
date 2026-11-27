@@ -310,9 +310,69 @@
 .checkItems { display: flex; flex-wrap: wrap; gap: 5px 20px; margin-top: 7px; }
 .checkItems label { display: flex; align-items: center; min-height: 32px; }
 .checkItems input { width: 16px; height: 16px; }
-.availability { min-width: 0; }
-.availability table { min-width: 490px; }
-.availability :is(th, td) input { min-width: 18px; min-height: 18px; }
+.availability { min-width: 0; display: grid; gap: 12px; }
+.availabilitySummary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 5px 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.availabilitySummary > span { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.availabilityScroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.availabilityTable {
+  width: 100%;
+  min-width: 318px;
+  table-layout: fixed;
+  border-spacing: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.availabilityTable :is(th, td) { padding: 0; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+.availabilityTable tr > :last-child { border-right: 0; }
+.availabilityTable tbody tr:last-child > * { border-bottom: 0; }
+.availabilityTable th { background: var(--soft); font-size: 12px; font-weight: 650; }
+.availabilityTable thead th { height: 36px; }
+.availabilityTable th:first-child { width: clamp(52px, 9vw, 78px); }
+.availabilityTable abbr { text-decoration: none; }
+.availabilityTable button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: #fff8f2;
+  cursor: crosshair;
+}
+.availabilityTable button[aria-pressed="true"] { background: var(--button); }
+.availabilityTable button[aria-pressed="true"] > span {
+  width: 10px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  transform: rotate(-45deg) translateY(-1px);
+}
+.availabilityTable button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 5px var(--surface);
+}
+@media (hover: hover) {
+  .availabilityTable button:hover { box-shadow: inset 0 0 0 1px var(--control); }
+  .availabilityTable button:hover:focus-visible { box-shadow: inset 0 0 0 5px var(--surface); }
+}
+@media (forced-colors: active) {
+  .availabilityTable button[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+}
 .save { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .save span, .metadata, .empty { color: var(--muted); }
 .desk .primary { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 8px; background: var(--button); color: #fff8f2; font-weight: 650; cursor: pointer; }
@@ -345,6 +405,26 @@
 .resource summary svg { display: inline-block; vertical-align: middle; margin-inline: 5px; }
 .resource p { padding: 0 13px 13px; color: var(--muted); white-space: pre-wrap; }
 a.resource, p.resource { padding: 12px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes deskSectionIn {
+    from { translate: 0 6px; }
+    to { translate: none; }
+  }
+
+  @keyframes deskTileSettle {
+    0%, 100% { translate: none; scale: 1; }
+    45% { translate: 0 -5px; scale: .97; }
+  }
+
+  .overview > * { animation: deskSectionIn 240ms cubic-bezier(.16, 1, .3, 1) backwards; }
+  .overview > :nth-child(2) { animation-delay: 45ms; }
+  .greetingPattern i, .sidePattern .mark {
+    animation: deskTileSettle 2.4s ease-in-out;
+  }
+  .greetingPattern i:nth-child(even), .sidePattern .mark:nth-child(even) { animation-delay: 110ms; }
+  .greetingPattern i:nth-child(3), .sidePattern .mark:nth-child(3n) { animation-delay: 220ms; }
+}
 
 @media (max-width: 1080px) {
   .overview { grid-template-columns: minmax(0, 1fr); }
