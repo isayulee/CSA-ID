@@ -1,0 +1,1 @@
+PASS: desktop and phone navigation, Project membership, ordered Columns and Tasks, assignment highlighting, read-only Board, denied access and no horizontal overflow.
