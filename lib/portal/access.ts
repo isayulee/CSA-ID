@@ -42,7 +42,7 @@ export async function loadPortalActor(db: PortalDb, user: PortalActor["user"], a
 }
 
 /** The signed-in User with their Portal rights; `actor` is null when they may not open the Portal. */
-async function currentPortalAccount() {
+export async function currentPortalAccount() {
   const account = await getCurrentAccount();
   if (!account) return null;
   return { actor: await loadPortalActor(getDb(), account.user, getBindings().ADMIN_GOOGLE_SUBS) };
