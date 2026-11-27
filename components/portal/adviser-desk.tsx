@@ -396,8 +396,8 @@ function Settings({ adviser, photo, availableCourses }: { adviser: Adviser; phot
           <fieldset><legend>Courses taught</legend><div className={styles.checkItems}>{availableCourses.map((course) => <label key={course.code}><input type="checkbox" name="course" value={course.code} defaultChecked={adviser.courses.includes(course.code)} /> {course.code} · {course.title}</label>)}</div></fieldset>
         </section>
         <section className={styles.panel} id="availability">
-          <h2>Weekly Availability</h2><p>Mark the hours you can tutor, in Manila time.</p>
-          <div className={styles.availability}><AvailabilityGrid slots={adviser.slots} /></div>
+          <h2>Weekly Availability</h2><p>Monday to Saturday, 08:00–17:00 Manila time.</p>
+          <AvailabilityGrid slots={adviser.slots} />
         </section>
         <div className={styles.save}><button type="submit" className={styles.primary}>Save settings</button><span role="status">{notice}</span></div>
       </form>
