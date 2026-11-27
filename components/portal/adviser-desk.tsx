@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { DashboardEditor, type DashboardData } from "@/components/dashboard-editor";
 import { AvailabilityGrid } from "./people";
+import { MyTasksPrototype, TasksPrototype } from "./tasks-prototype";
 import { KitDraftDialog, validMaterialLink } from "./teaching-kits";
 import { academicTerm, campuses, courses, getPreview, getSeed, peerId, statuses, subscribe, updatePreview, weekdays, type Adviser, type AdvisingRequest, type Course, type Kit, type PreviewState } from "./model";
 import styles from "./adviser-desk.module.css";
@@ -11,6 +12,7 @@ import styles from "./adviser-desk.module.css";
 const screens = [
   { id: "home", label: "Home", href: "/portal", icon: "home" },
   { id: "scheduler", label: "Scheduler", href: "/portal/scheduler", icon: "calendar" },
+  { id: "tasks", label: "Tasks", href: "/portal/tasks", icon: "tasks" },
   { id: "kits", label: "Teaching Kits", href: "/portal/kits", icon: "book" },
   { id: "directory", label: "Directory", href: "/portal/directory", icon: "people" },
   { id: "me", label: "Settings", href: "/portal/me", icon: "settings" },
@@ -66,6 +68,7 @@ function setDirectoryPhoto(file?: File) {
 const icons = {
   home: "m3 10 9-7 9 7v10H3z M9 20v-6h6v6",
   calendar: "M4 6h16v14H4z M8 3v6m8-6v6M4 11h16m-12 4h3m2 0h3",
+  tasks: "M4 5h16M4 12h10M4 19h16m-4-8 2 2 3-4",
   book: "M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1v14",
   people: "M4 20v-2a4 4 0 0 1 4-4h3a4 4 0 0 1 4 4v2M16 14a4 4 0 0 1 4 4v2M13 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm3-3a3.5 3.5 0 0 1 0 7",
   settings: "M4 7h16M4 17h16M8 4v6m8 4v6",
@@ -414,12 +417,13 @@ function Settings({ adviser, photo, availableCourses }: { adviser: Adviser; phot
   </>;
 }
 
-export function AdviserDesk({ area, kitId, editKit, requestId, profileEditor }: {
+export function AdviserDesk({ area, kitId, editKit, requestId, profileEditor, tasksPrototype }: {
   area: Area;
   kitId?: string;
   editKit?: boolean;
   requestId?: string;
   profileEditor?: DashboardData | null;
+  tasksPrototype?: React.ComponentProps<typeof TasksPrototype>;
 }) {
   const state = useSyncExternalStore(subscribe, getPreview, getSeed);
   const dark = useSyncExternalStore(watchTheme, isDark, lightTheme);
@@ -447,7 +451,8 @@ export function AdviserDesk({ area, kitId, editKit, requestId, profileEditor }: 
         </div>
       </header>
       <main id="adviser-desk-main" className={styles.main}>
-        {area === "home" && <Home adviser={adviser} kits={state.kits} openKit={setKit} />}
+        {area === "home" && <><Home adviser={adviser} kits={state.kits} openKit={setKit} /><MyTasksPrototype /></>}
+        {area === "tasks" && tasksPrototype && <TasksPrototype key={`${tasksPrototype.boardId ?? ""}:${tasksPrototype.taskId ?? ""}`} {...tasksPrototype} />}
         {area === "kits" && <Library state={state} availableCourses={availableCourses} kitId={kitId} editKit={editKit} open={setKit} />}
         {area === "scheduler" && <ReadOnlyScheduler key={requestId} advisers={state.advisers} requests={state.requests} availableCourses={availableCourses} requestId={requestId} />}
         {area === "directory" && <Directory advisers={state.advisers} photo={photo} availableCourses={availableCourses} />}

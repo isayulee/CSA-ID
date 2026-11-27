@@ -354,7 +354,7 @@ a.resource, p.resource { padding: 12px; }
   .desk { display: flex; flex-direction: column; }
   .sidebar { position: relative; height: auto; gap: 11px; padding: 15px max(9px, 3vw) 9px; }
   .sidebar .brand { font-size: 22px; padding-left: 9px; }
-  .sidebar nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+  .sidebar nav { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .sidebar nav a { flex-direction: column; justify-content: center; gap: 3px; padding: 5px 0; min-height: 51px; font-size: clamp(10px, 2.7vw, 13px); text-align: center; line-height: 1.1; }
   .sidebar nav svg { width: 18px; height: 18px; }
   .sidePattern { inset: -83px -45px auto auto; opacity: .18; }
