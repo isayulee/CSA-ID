@@ -58,7 +58,7 @@ type View = (typeof viewTypes)[number][0];
 function tasksHref(role: Role, view: View, boardId?: string, taskId?: string) {
   const params = new URLSearchParams({ role, view });
   if (taskId) params.set("task", taskId);
-  return `/portal/tasks${boardId ? `/${boardId}` : ""}?${params}`;
+  return `/portal/tasks-preview${boardId ? `/${boardId}` : ""}?${params}`;
 }
 
 function allowedProject(project: Task["project"], role: Role) {
@@ -172,9 +172,9 @@ export function MyTasksPrototype() {
     .toSorted((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format();
   return <section className={styles.myTasks} aria-labelledby="my-tasks">
-    <header><h2 id="my-tasks">My Tasks</h2><Link href="/portal/tasks">All Tasks</Link></header>
+    <header><h2 id="my-tasks">My Tasks</h2><Link href="/portal/tasks-preview">All Tasks</Link></header>
     {myTasks.length ? <ul>{myTasks.map((task) => <li key={task.id}>
-      <Link href={`/portal/tasks/${task.project}?task=${task.id}`}>{task.title}</Link>
+      <Link href={`/portal/tasks-preview/${task.project}?task=${task.id}`}>{task.title}</Link>
       {task.due && <small data-overdue={task.due < today || undefined}>{task.due < today ? "Overdue" : "Due"} <time dateTime={task.due}>{task.due}</time></small>}
     </li>)}</ul> : <p>No open Tasks assigned to you.</p>}
   </section>;

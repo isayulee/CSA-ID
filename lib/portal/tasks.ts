@@ -120,12 +120,11 @@ export type TaskView = {
   assignees: { userId: string; name: string }[];
 };
 
-/** One Board with its Columns and their Tasks, each in position order. A 404 when the viewer can't reach its Project. */
-export async function readBoard(db: PortalDb, actor: PortalActor, boardId: string): Promise<PortalResult> {
+export async function loadBoard(db: PortalDb, actor: PortalActor, boardId: string) {
   const [board] = await db.select().from(boards).where(eq(boards.id, boardId)).limit(1);
-  if (!board) return NOT_FOUND();
+  if (!board) return null;
   const access = await projectAccess(db, actor, board.projectId);
-  if (!access) return NOT_FOUND();
+  if (!access) return null;
 
   const [columnRows, taskRows, assigneeRows] = await db.batch([
     db.select({ id: boardColumns.id, name: boardColumns.name, position: boardColumns.position, isDone: boardColumns.isDone })
@@ -157,11 +156,14 @@ export async function readBoard(db: PortalDb, actor: PortalActor, boardId: strin
 
   const { project, manage } = access;
   return {
-    status: 200,
-    body: {
-      project: { id: project.id, name: project.name, archived: project.archivedAt !== null, manage },
-      board: { id: board.id, name: board.name, boardType: board.boardType, archived: board.archivedAt !== null },
-      columns: columnRows.map((column) => ({ ...column, tasks: tasksByColumn.get(column.id) ?? [] })),
-    },
+    project: { id: project.id, name: project.name, archived: project.archivedAt !== null, manage },
+    board: { id: board.id, name: board.name, boardType: board.boardType, archived: board.archivedAt !== null },
+    columns: columnRows.map((column) => ({ ...column, tasks: tasksByColumn.get(column.id) ?? [] })),
   };
+}
+
+/** One Board with its Columns and their Tasks, each in position order. A 404 when the viewer can't reach its Project. */
+export async function readBoard(db: PortalDb, actor: PortalActor, boardId: string): Promise<PortalResult> {
+  const body = await loadBoard(db, actor, boardId);
+  return body ? { status: 200, body } : NOT_FOUND();
 }
