@@ -7,6 +7,8 @@ export type AppBindings = CloudflareEnv & {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   IMAGES: ImagesBinding;
+  /** Worker secret: the bearer the intake Sheet's Apps Script sends to `/api/intake/advising-requests`. */
+  INTAKE_SECRET?: string;
 };
 
 export function getBindings(): AppBindings {
