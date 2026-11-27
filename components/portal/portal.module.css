@@ -263,7 +263,7 @@
   .portal[data-shortcuts] .profileFooter { bottom: var(--shortcuts-height); }
   .mobileHeader { display: flex; min-height: 57px; }
   .mobileHeader a:last-child { display: inline; width: auto; height: auto; }
-  .bottomNav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .bottomNav { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
   .bottomNav a { text-align: center; line-height: 1.1; white-space: normal; }
   .profileFields, .profilePreview, .profileAccount { padding: 14px; }
 }
