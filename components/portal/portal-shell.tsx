@@ -8,6 +8,7 @@ import styles from "./portal.module.css";
 const navigation = [
   { area: "home", href: "/portal", label: "Home" },
   { area: "scheduler", href: "/portal/scheduler", label: "Scheduler" },
+  { area: "tasks", href: "/portal/tasks", label: "Tasks" },
   { area: "kits", href: "/portal/kits", label: "Teaching Kits" },
   { area: "directory", href: "/portal/directory", label: "Directory" },
   { area: "me", href: "/portal/me", label: "Settings" },
@@ -22,6 +23,7 @@ const administration = [
 const icons = {
   home: "M3 10l9-7 9 7v10h-6v-6H9v6H3z",
   scheduler: "M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16 M8 15h4 M8 18h7",
+  tasks: "M4 5h16M4 12h10M4 19h16m-4-8 2 2 3-4",
   kits: "M3 6h7l2 2h9v12H3z",
   directory: "M16 20H3v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4z M13 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z M18 4a3 3 0 0 1 0 6 M18 14a4 4 0 0 1 3 4v2",
   me: "M4 6h16 M4 12h16 M4 18h16 M8 4v4 M16 10v4 M10 16v4",
@@ -35,10 +37,14 @@ function Icon({ name }: { name: keyof typeof icons }) {
 
 type PortalArea = (typeof navigation)[number]["area"] | (typeof administration)[number]["area"];
 
-export function PortalShell({ area, preview, children }: { area: PortalArea; preview: boolean; children: ReactNode }) {
+export function PortalShell({ area, preview, showTasks = false, children }: { area: PortalArea; preview: boolean; showTasks?: boolean; children: ReactNode }) {
   const drawer = useRef<HTMLDialogElement>(null);
   const isAdmin = administration.some((item) => item.area === area);
-  const items = preview ? navigation : navigation.filter((item) => item.area === "profile");
+  const items = navigation.filter((item) => {
+    if (item.area === "tasks") return showTasks;
+    return preview || item.area === "profile";
+  });
+  const hasShortcuts = preview || showTasks;
   const home = preview ? "/portal" : "/dashboard";
   const closeDrawer = () => drawer.current?.close();
 
@@ -62,7 +68,7 @@ export function PortalShell({ area, preview, children }: { area: PortalArea; pre
   };
 
   return (
-    <div className={styles.portal} data-shortcuts={preview || undefined}>
+    <div className={styles.portal} data-shortcuts={hasShortcuts || undefined}>
       <a className="skipLink" href="#portal-main">Skip to content</a>
       <aside className={styles.sidebar}>{menu()}<PortalGeometry corner="sidebar" /></aside>
       <header className={styles.mobileHeader}>
@@ -74,11 +80,11 @@ export function PortalShell({ area, preview, children }: { area: PortalArea; pre
         {menu(true)}
       </dialog>}
       <main id="portal-main" className={styles.workspace}>
-        {area !== "profile" && <p className={styles.previewNotice}>Local preview · {isAdmin ? "Administrator" : "Peer Adviser"} · Fictional data. Changes stay in this tab.</p>}
+        {preview && area !== "profile" && <p className={styles.previewNotice}>Local preview · {isAdmin ? "Administrator" : "Peer Adviser"} · Fictional data. Changes stay in this tab.</p>}
         <PortalGeometry corner="workspace" />
         {children}
       </main>
-      {preview && <nav className={styles.bottomNav} aria-label="Portal shortcuts">
+      {hasShortcuts && <nav className={styles.bottomNav} aria-label="Portal shortcuts">
         {items.map((item) => <Link href={item.href} key={item.area} aria-current={area === item.area ? "page" : undefined}><Icon name={item.area} />{item.label}</Link>)}
       </nav>}
     </div>

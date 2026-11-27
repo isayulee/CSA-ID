@@ -1,0 +1,74 @@
+.tasks {
+  display: grid;
+  gap: 24px;
+  overflow-wrap: anywhere;
+}
+.heading, .projects {
+  display: grid;
+  gap: 12px;
+}
+.heading p, .tasks ul {
+  margin: 0;
+}
+.tasks ul {
+  list-style: none;
+  padding: 0;
+}
+.tasks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  width: fit-content;
+  color: var(--deep);
+}
+.project, .column {
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 16px;
+}
+.project {
+  background: var(--panel);
+}
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(218px, 100%), 1fr));
+  align-items: start;
+  gap: 14px;
+}
+.column {
+  background: var(--tint);
+}
+.column ul {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.column > p, .project > p {
+  margin: 10px 0 0;
+  color: var(--secondary);
+}
+.task {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.task[data-mine] {
+  border-color: var(--crimson);
+}
+.assignment {
+  font-size: .8125rem;
+  color: var(--deep);
+}
+.description {
+  margin: 0;
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
