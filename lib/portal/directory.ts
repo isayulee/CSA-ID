@@ -4,7 +4,7 @@ import { peerAdvisers, profiles, publishedProfiles, users } from "@/lib/db/schem
 import type { PortalDb, PortalResult } from "./access";
 
 /** One Peer Adviser in the Directory (§14.3). `photoUrl` and `profileUrl` are set only for a Published Profile. */
-export type DirectoryEntry = {
+type DirectoryEntry = {
   userId: string;
   name: string;
   officerPosition: string | null;
@@ -17,7 +17,7 @@ export type DirectoryEntry = {
  * name. A Published Profile shows its display name, photo and `/id/<slug>` link;
  * a Draft or Suspended Profile, or none, shows `users.name` with neither.
  */
-export async function listDirectory(db: PortalDb): Promise<DirectoryEntry[]> {
+async function listDirectory(db: PortalDb): Promise<DirectoryEntry[]> {
   const rows = await db.select({
     userId: peerAdvisers.userId,
     userName: users.name,

@@ -1,8 +1,8 @@
 export type UploadKind = "avatar" | "background";
-export type SniffedFormat = "jpeg" | "png" | "webp";
+type SniffedFormat = "jpeg" | "png" | "webp";
 
 export const MAX_INPUT_BYTES: Record<UploadKind, number> = { avatar: 2_000_000, background: 4_000_000 };
-export const MAX_INPUT_PIXELS = 24_000_000;
+const MAX_INPUT_PIXELS = 24_000_000;
 export const MULTIPART_OVERHEAD_BYTES = 16_384;
 
 const OUTPUT_BOX: Record<UploadKind, { width: number; height: number; fit: "crop" | "scale-down" }> = {

@@ -139,10 +139,10 @@ const slotInput = z.union([
   z.object({ onDate: isoDate, hour }).strict().transform((slot) => ({ weekday: new Date(`${slot.onDate}T00:00:00Z`).getUTCDay(), ...slot })),
 ]).refine((slot) => slot.weekday !== 0, "Slots run Monday to Saturday");
 
-export const claimInput = z.object({ requestId });
-export const noteInput = z.object({ requestId, body: z.string().trim().min(1, "Write a note").max(2000, "Notes are at most 2000 characters") });
-export const assignInput = z.object({ requestId, userId: z.string().min(1).max(64) });
-export const updateInput = z.object({
+const claimInput = z.object({ requestId });
+const noteInput = z.object({ requestId, body: z.string().trim().min(1, "Write a note").max(2000, "Notes are at most 2000 characters") });
+const assignInput = z.object({ requestId, userId: z.string().min(1).max(64) });
+const updateInput = z.object({
   requestId,
   status: z.enum(STATUSES).optional(),
   // null clears the schedule; a start time needs a date (§14.3).

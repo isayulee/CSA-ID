@@ -1,6 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export type AppBindings = CloudflareEnv & {
+type AppBindings = CloudflareEnv & {
   /** Worker secret: comma-separated Google subject IDs of the Administrators. */
   ADMIN_GOOGLE_SUBS?: string;
   APP_ORIGIN?: string;

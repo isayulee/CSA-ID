@@ -28,7 +28,7 @@ export function isAdministrator(actor: Pick<schema.User, "googleSub"> | null | u
   return adminSubs.split(",").map((sub) => sub.trim()).filter(Boolean).includes(actor.googleSub);
 }
 
-export const adminActionInput = z.object({
+const adminActionInput = z.object({
   profileId: z.string().min(1).max(64),
   reason: z.string().trim().min(1).max(1000),
 });

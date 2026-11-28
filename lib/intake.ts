@@ -12,8 +12,8 @@ import { chunk } from "@/lib/portal/batch";
 type Db = DrizzleD1Database<typeof schema>;
 type BatchItem = Parameters<Db["batch"]>[0][number];
 
-export const MAX_INTAKE_BODY_BYTES = 256 * 1024;
-export const MAX_INTAKE_ROWS = 100;
+const MAX_INTAKE_BODY_BYTES = 256 * 1024;
+const MAX_INTAKE_ROWS = 100;
 // D1 on the Workers Free plan allows 50 queries per invocation and counts a batch as one, so rows go 25 to a
 // batch. When a batch fails, its rows are retried one at a time, so one bad row can't hold back the others,
 // until the queries left run out; rows not written then are reported as failed for the next resend.
@@ -120,7 +120,7 @@ function rowStatements(db: Db, id: string, key: string, row: IntakeRow, refs: { 
  * Validates each row and writes the valid ones. A row that fails validation is reported and skipped; a row
  * that D1 refuses is reported as failed, and the Apps Script's next resend retries it.
  */
-export async function importAdvisingRequests(db: Db, rows: unknown[]): Promise<Outcome> {
+async function importAdvisingRequests(db: Db, rows: unknown[]): Promise<Outcome> {
   const outcome: Outcome = { received: rows.length, imported: 0, duplicates: 0, rejected: [], failed: [] };
   const valid: { index: number; row: IntakeRow }[] = [];
   rows.forEach((raw, index) => {

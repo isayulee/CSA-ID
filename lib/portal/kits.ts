@@ -13,7 +13,7 @@ import { deleteUnusedKitFiles, type KitDeps } from "./kit-files";
 const ALLOWED_LINK_HOSTS = new Set(["drive.google.com", "docs.google.com", "www.youtube.com", "youtu.be"]);
 
 /** The link as stored, or null when it isn't a plain https URL on an allowed host. */
-export function allowedKitLink(raw: string): string | null {
+function allowedKitLink(raw: string): string | null {
   let url: URL;
   try {
     url = new URL(raw);
@@ -38,7 +38,7 @@ const kitItem = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("drive"), label, url: link }),
   z.object({ kind: z.literal("youtube"), label, url: link }),
 ]);
-export const kitDraftInput = z.object({
+const kitDraftInput = z.object({
   courseCode,
   academicYear: z.number().int().min(2000).max(2100),
   term: z.number().int().min(1).max(4),
@@ -48,11 +48,11 @@ export const kitDraftInput = z.object({
   /** The approved version the author was editing; null for a new kit. Left out, the kit's current version is used. */
   baseVersionId: z.string().min(1).max(64).nullable().optional(),
 });
-export type KitItemInput = z.infer<typeof kitItem>;
+type KitItemInput = z.infer<typeof kitItem>;
 
 const versionId = z.string().min(1).max(64);
-export const approveKitDraftInput = z.object({ versionId });
-export const rejectKitDraftInput = z.object({ versionId, note: z.string().trim().min(1).max(1000) });
+const approveKitDraftInput = z.object({ versionId });
+const rejectKitDraftInput = z.object({ versionId, note: z.string().trim().min(1).max(1000) });
 
 const UNAUTHORIZED = portalFail(401, "Unauthorized");
 const KIT_NOT_FOUND = portalFail(404, "Teaching Kit not found");

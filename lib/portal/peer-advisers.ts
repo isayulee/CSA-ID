@@ -11,11 +11,11 @@ const userId = z.string().min(1).max(64);
 const campusId = z.string().min(2).max(32);
 const reason = z.string().trim().min(1).max(1000);
 
-export const approveInput = z.object({ userId, campusId });
-export const revokeInput = z.object({ userId, reason });
+const approveInput = z.object({ userId, campusId });
+const revokeInput = z.object({ userId, reason });
 export const campusInput = z.object({ userId, campusId });
 // Clearing the flag needs a reason (§14.2); granting it takes none.
-export const studentAssistantInput = z.discriminatedUnion("studentAssistant", [
+const studentAssistantInput = z.discriminatedUnion("studentAssistant", [
   z.object({ userId, studentAssistant: z.literal(true) }),
   z.object({ userId, studentAssistant: z.literal(false), reason }),
 ]);
@@ -109,7 +109,7 @@ export async function updatePeerAdviserCampus({ db, adminSubs }: PortalAdminDeps
   return OK;
 }
 
-export const officerInput = z.union([
+const officerInput = z.union([
   z.object({ userId, officerPosition: z.string().trim().min(1).max(64), officerOrder: z.number().int().min(1).max(99) }),
   z.object({ userId, officerPosition: z.null(), officerOrder: z.null() }),
 ]);

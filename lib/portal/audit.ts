@@ -2,7 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import type { AdminAuditAction, AdminAuditTarget } from "@/lib/db/schema";
 
-export type AuditEntry = {
+type AuditEntry = {
   actorGoogleSub: string;
   action: AdminAuditAction;
   targetType: AdminAuditTarget;

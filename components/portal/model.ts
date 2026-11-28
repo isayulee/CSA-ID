@@ -15,7 +15,7 @@ export const statuses = {
   no_peer_adviser_available: "No Peer Adviser Available",
   no_response_from_advisee: "No Response from Advisee",
 } as const;
-export type RequestStatus = keyof typeof statuses;
+type RequestStatus = keyof typeof statuses;
 export const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const hours = Array.from({ length: 9 }, (_, i) => i + 8);
 
@@ -31,7 +31,7 @@ export type KitDraft = Kit & { author: string; base: string; state: "pending" | 
 export type PreviewState = { addedCourses?: Course[]; advisers: Adviser[]; requests: AdvisingRequest[]; kits: Kit[]; drafts: KitDraft[] };
 export const peerId = "alex";
 export const candidates = [{ id: "sam", name: "Sam Rivera" }, { id: "mika", name: "Mika Tan" }];
-export const sampleDay = "2026-11-25";
+const sampleDay = "2026-11-25";
 
 const seed: PreviewState = {
   advisers: [
