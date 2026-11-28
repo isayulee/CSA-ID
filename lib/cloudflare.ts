@@ -15,6 +15,3 @@ export function getBindings(): AppBindings {
   return getCloudflareContext().env as AppBindings;
 }
 
-export async function getBindingsAsync(): Promise<AppBindings> {
-  return (await getCloudflareContext({ async: true })).env as AppBindings;
-}

@@ -150,7 +150,6 @@ export const updateInput = z.object({
   // Replaces every slot and clears "times unclear" (§14.5).
   slots: z.array(slotInput).min(1, "Pick at least one slot").max(100).optional(),
 }).refine((input) => input.status !== undefined || input.schedule !== undefined || input.slots !== undefined, "Change the status, schedule or slots");
-export type UpdateInput = z.infer<typeof updateInput>;
 
 const NOT_YOURS = portalFail(403, "Only the Peer Adviser who claimed this request, or an Administrator, can change it");
 const CHANGED = portalFail(409, "This request changed while you were editing it. Reload and try again.");

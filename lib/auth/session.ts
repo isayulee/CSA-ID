@@ -1,7 +1,6 @@
+import "server-only";
 import { and, eq, gt } from "drizzle-orm";
-import { cookies } from "next/headers";
-import { getDb } from "@/lib/db";
-import { profiles, sessions, users } from "@/lib/db/schema";
+import { sessions, users } from "@/lib/db/schema";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/lib/db/schema";
 
@@ -27,32 +26,10 @@ export async function hashToken(token: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function createSession(userId: string): Promise<{ token: string; maxAge: number }>;
-export function createSession(db: Db, userId: string, now?: number): Promise<string>;
-export async function createSession(
-  arg1: string | Db,
-  arg2?: string,
-  arg3?: number,
-): Promise<string | { token: string; maxAge: number }> {
+export async function createSession(db: Db, userId: string, now = Math.floor(Date.now() / 1000)) {
   const token = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
-  if (typeof arg1 === "string") {
-    const userId = arg1;
-    const now = Math.floor(Date.now() / 1000);
-    await getDb().insert(sessions).values({ tokenHash: await hashToken(token), userId, expiresAt: now + SESSION_LIFETIME_SECONDS, createdAt: now });
-    return { token, maxAge: SESSION_LIFETIME_SECONDS };
-  } else {
-    const db = arg1;
-    const userId = arg2!;
-    const now = arg3 ?? Math.floor(Date.now() / 1000);
-    await db.insert(sessions).values({ tokenHash: await hashToken(token), userId, expiresAt: now + SESSION_LIFETIME_SECONDS, createdAt: now });
-    return token;
-  }
-}
-
-export async function deleteCurrentSession() {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (token) await getDb().delete(sessions).where(eq(sessions.tokenHash, await hashToken(token)));
+  await db.insert(sessions).values({ tokenHash: await hashToken(token), userId, expiresAt: now + SESSION_LIFETIME_SECONDS, createdAt: now });
+  return token;
 }
 
 export async function deleteSession(db: Db, token: string | undefined) {
@@ -76,18 +53,4 @@ export async function validateSession(db: Db, token: string | undefined, now = M
     await db.update(sessions).set({ expiresAt: now + SESSION_LIFETIME_SECONDS }).where(eq(sessions.tokenHash, tokenHash));
   }
   return row.user;
-}
-
-export async function getCurrentUser() {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const now = Math.floor(Date.now() / 1000);
-  const [result] = await getDb()
-    .select({ user: users, profile: profiles })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .innerJoin(profiles, eq(profiles.userId, users.id))
-    .where(and(eq(sessions.tokenHash, await hashToken(token)), gt(sessions.expiresAt, now)))
-    .limit(1);
-  return result ?? null;
 }
