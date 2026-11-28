@@ -33,7 +33,7 @@ export type PortalResult = { status: number; body: object };
 export const portalFail = (status: number, error: string): PortalResult => ({ status, body: { error } });
 
 /** The Portal rights of a signed-in User: a `peer_advisers` row or the Administrator allowlist, else null. */
-export async function loadPortalActor(db: PortalDb, user: PortalActor["user"], adminSubs: string | undefined): Promise<PortalActor | null> {
+async function loadPortalActor(db: PortalDb, user: PortalActor["user"], adminSubs: string | undefined): Promise<PortalActor | null> {
   const [row] = await db.select({ userId: schema.peerAdvisers.userId }).from(schema.peerAdvisers)
     .where(eq(schema.peerAdvisers.userId, user.id)).limit(1);
   const administrator = isAdministrator(user, adminSubs);

@@ -39,7 +39,7 @@ export function parseAttendeeCount(text: string) {
   return Math.min(50, Math.max(1, Number(match[0])));
 }
 
-export type AdvisingRequestStatus = (typeof advisingRequests.$inferSelect)["status"];
+type AdvisingRequestStatus = (typeof advisingRequests.$inferSelect)["status"];
 
 // The phrases the CSA team writes in the Remarks column for each of the six statuses.
 const STATUS_PHRASES: readonly (readonly [RegExp, AdvisingRequestStatus])[] = [

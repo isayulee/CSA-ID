@@ -1,4 +1,4 @@
-export const DEFAULT_MAX_BODY_BYTES = 16 * 1024;
+const DEFAULT_MAX_BODY_BYTES = 16 * 1024;
 
 type Failure = { ok: false; response: Response };
 type Success<A> = { ok: true; account: A; body: unknown };

@@ -5,24 +5,24 @@ import * as schema from "@/lib/db/schema";
 import { loadPublishedProfile } from "@/lib/public/published-profile";
 
 export const MAX_BODY_BYTES = 4096;
-export const IP_WINDOW_SECONDS = 60;
-export const WINDOW_SECONDS = 3600;
+const IP_WINDOW_SECONDS = 60;
+const WINDOW_SECONDS = 3600;
 export const MAX_PER_PROFILE_PER_WINDOW = 10;
-export const MAX_TOTAL_PER_WINDOW = 100;
+const MAX_TOTAL_PER_WINDOW = 100;
 
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-export const reportInput = z.object({
+const reportInput = z.object({
   profile: z.string().min(1).max(48),
   reason: z.enum(["impersonation", "malicious-link", "prohibited-content"]),
   details: z.string().trim().min(5).max(1000),
   turnstileToken: z.string().min(1).max(2048),
 });
 
-export type ReportKv = Pick<KVNamespace, "get" | "put">;
-export type ReportDb = DrizzleD1Database<typeof schema>;
+type ReportKv = Pick<KVNamespace, "get" | "put">;
+type ReportDb = DrizzleD1Database<typeof schema>;
 
-export type SubmitDeps = {
+type SubmitDeps = {
   db: ReportDb;
   kv: ReportKv;
   secret: string | undefined;
@@ -30,7 +30,7 @@ export type SubmitDeps = {
   now?: number;
 };
 
-export type SubmitResult = { status: number; body: { ok: true } | { error: string } };
+type SubmitResult = { status: number; body: { ok: true } | { error: string } };
 
 const fail = (status: number, error: string): SubmitResult => ({ status, body: { error } });
 

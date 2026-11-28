@@ -61,7 +61,7 @@ export async function saveDraft(db: Db, userId: string, input: ProfileInput) {
   return true;
 }
 
-export type ClaimResult =
+type ClaimResult =
   | { ok: true; slug: string }
   | { ok: false; status: 400 | 404 | 409; message: string };
 

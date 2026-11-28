@@ -42,13 +42,13 @@ export function isSafeProfileUrl(service: ProfileService, rawUrl: string) {
   return service === "website" || Boolean(allowed[service]?.some((domain) => host === domain || host.endsWith(`.${domain}`)));
 }
 
-export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const blockedSlugs = new Set([
   "admin", "administrator", "api", "app", "assets", "auth", "dashboard", "help", "id", "login", "logout", "media", "mod", "moderator", "official", "privacy", "report", "root", "settings", "signin", "signup", "static", "support", "system", "terms", "uploads", "www",
 ]);
 
-export type SlugCheck = { ok: true; slug: string } | { ok: false; reason: "invalid" | "reserved"; message: string };
+type SlugCheck = { ok: true; slug: string } | { ok: false; reason: "invalid" | "reserved"; message: string };
 
 export function checkSlug(raw: unknown): SlugCheck {
   const slug = typeof raw === "string" ? raw.trim().toLowerCase() : "";

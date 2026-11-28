@@ -20,11 +20,11 @@ export const courseCode = z.string().max(64).transform(normalizeCourseCode)
 const courseTitle = z.string().trim().min(1).max(128);
 const reason = z.string().trim().min(1).max(1000);
 
-export const addCourseInput = z.object({ code: courseCode, title: courseTitle });
-export const updateCourseInput = z.object({ code: courseCode, newCode: courseCode, title: courseTitle });
-export const mergeCourseInput = z.object({ code: courseCode, into: courseCode, reason });
-export const deleteCourseInput = z.object({ code: courseCode, reason });
-export const addCampusInput = z.object({
+const addCourseInput = z.object({ code: courseCode, title: courseTitle });
+const updateCourseInput = z.object({ code: courseCode, newCode: courseCode, title: courseTitle });
+const mergeCourseInput = z.object({ code: courseCode, into: courseCode, reason });
+const deleteCourseInput = z.object({ code: courseCode, reason });
+const addCampusInput = z.object({
   id: z.string().regex(/^[a-z0-9-]{2,32}$/, "Use 2 to 32 lowercase letters, digits and hyphens"),
   name: z.string().trim().min(1).max(64),
 });

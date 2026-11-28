@@ -16,9 +16,9 @@ export type PeerAdviserForMatching = {
   claimedPendingOrRescheduledCount: number;
 };
 
-export type Suggestion = { userId: string; matchingSlots: number; claimedPendingOrRescheduledCount: number };
+type Suggestion = { userId: string; matchingSlots: number; claimedPendingOrRescheduledCount: number };
 
-export type NoSuggestionReason = "course_missing" | "campus_missing" | "times_unclear";
+type NoSuggestionReason = "course_missing" | "campus_missing" | "times_unclear";
 
 export type MatchingResult =
   | { ok: true; suggestions: Suggestion[] }

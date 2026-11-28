@@ -7,9 +7,9 @@ import { chunk } from "./batch";
 /** What the Teaching Kit functions that touch PDF files need. */
 export type KitDeps = { db: PortalDb; kv: Pick<KVNamespace, "get" | "put" | "delete"> };
 
-export const MAX_KIT_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_KIT_FILE_BYTES = 5 * 1024 * 1024;
 /** Teaching Kit PDFs stop here, which keeps the rest of the KV namespace for Profile images (§14.8). */
-export const KIT_FILES_QUOTA_BYTES = 500 * 1000 * 1000;
+const KIT_FILES_QUOTA_BYTES = 500 * 1000 * 1000;
 const UNATTACHED_GRACE_SECONDS = 24 * 60 * 60;
 const PDF_SIGNATURE = new TextEncoder().encode("%PDF-");
 

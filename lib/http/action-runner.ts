@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { purgeProfilePage } from "@/lib/edge-cache";
 import { guardMutation, type GuardOptions } from "./mutation-guard";
 
-export type MutationResult = {
+type MutationResult = {
   status?: number;
   body: object;
   /** The Slug whose cached public page this action changed. */

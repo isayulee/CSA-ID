@@ -42,8 +42,6 @@ import { getBindings } from "@/lib/cloudflare";
 const { DB, KV } = getBindings();
 ```
 
-Use `getBindingsAsync()` in code that runs outside a request, such as at module load or during static generation.
-
 After you change `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `cloudflare-env.d.ts`.
 
 ## Images

@@ -12,8 +12,8 @@ import { loadCampus } from "./peer-advisers";
 // Every function reads and writes only the Session User's rows: none takes a User ID from the request.
 
 export const campusInput = z.object({ campusId: z.string().min(2).max(32) });
-export const coursesInput = z.object({ courseCodes: z.array(courseCode).max(50) });
-export const availabilityInput = z.object({
+const coursesInput = z.object({ courseCodes: z.array(courseCode).max(50) });
+const availabilityInput = z.object({
   slots: z.array(z.object({ weekday: z.number().int().min(1).max(6), hour: z.number().int().min(HOURS[0]).max(HOURS[HOURS.length - 1]) })).max(6 * HOURS.length),
 });
 

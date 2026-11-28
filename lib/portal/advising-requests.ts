@@ -139,10 +139,10 @@ const slotInput = z.union([
   z.object({ onDate: isoDate, hour }).strict().transform((slot) => ({ weekday: new Date(`${slot.onDate}T00:00:00Z`).getUTCDay(), ...slot })),
 ]).refine((slot) => slot.weekday !== 0, "Slots run Monday to Saturday");
 
-export const claimInput = z.object({ requestId });
-export const noteInput = z.object({ requestId, body: z.string().trim().min(1, "Write a note").max(2000, "Notes are at most 2000 characters") });
-export const assignInput = z.object({ requestId, userId: z.string().min(1).max(64) });
-export const updateInput = z.object({
+const claimInput = z.object({ requestId });
+const noteInput = z.object({ requestId, body: z.string().trim().min(1, "Write a note").max(2000, "Notes are at most 2000 characters") });
+const assignInput = z.object({ requestId, userId: z.string().min(1).max(64) });
+const updateInput = z.object({
   requestId,
   status: z.enum(STATUSES).optional(),
   // null clears the schedule; a start time needs a date (§14.3).
@@ -150,7 +150,6 @@ export const updateInput = z.object({
   // Replaces every slot and clears "times unclear" (§14.5).
   slots: z.array(slotInput).min(1, "Pick at least one slot").max(100).optional(),
 }).refine((input) => input.status !== undefined || input.schedule !== undefined || input.slots !== undefined, "Change the status, schedule or slots");
-export type UpdateInput = z.infer<typeof updateInput>;
 
 const NOT_YOURS = portalFail(403, "Only the Peer Adviser who claimed this request, or an Administrator, can change it");
 const CHANGED = portalFail(409, "This request changed while you were editing it. Reload and try again.");

@@ -15,7 +15,7 @@ import { adminAuditLog, draftSocialLinks, profiles, publishedProfiles, published
 /** Who asked for an Administrator action, and why. Written to the audit log. */
 export type AuditNote = { actorGoogleSub: string; reason: string };
 
-export type PublishResult = { ok: true; slug: string } | { ok: false; status: 400 | 403; error: string };
+type PublishResult = { ok: true; slug: string } | { ok: false; status: 400 | 403; error: string };
 
 const unixNow = () => Math.floor(Date.now() / 1000);
 
